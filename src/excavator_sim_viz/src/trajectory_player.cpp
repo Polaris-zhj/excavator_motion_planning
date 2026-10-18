@@ -108,16 +108,22 @@ class TrajectoryPlayer final : public rclcpp::Node {
       }
     }
     if (!has_trajectory) {
-      return;
+      trajectory.joint_names = {"swing_joint", "boom_joint", "stick_joint",
+                                "bucket_joint"};
+      trajectory.points.resize(1);
+      trajectory.points.front().positions = {0.0, 0.0, 0.0, 0.0};
     }
 
-    const double elapsed =
-        std::chrono::duration<double>(Clock::now() - start).count();
+    const double elapsed = has_trajectory
+                               ? std::chrono::duration<double>(
+                                     Clock::now() - start).count()
+                               : 0.0;
     const auto& points = trajectory.points;
     std::vector<double> positions = points.front().positions;
     std::vector<double> velocities(trajectory.joint_names.size(), 0.0);
 
-    if (elapsed >= ToSeconds(points.back().time_from_start)) {
+    if (!has_trajectory ||
+        elapsed >= ToSeconds(points.back().time_from_start)) {
       positions = points.back().positions;
     } else {
       for (std::size_t index = 1; index < points.size(); ++index) {
