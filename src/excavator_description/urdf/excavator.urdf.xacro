@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  挖掘机 robot description (ROS 2 / Gazebo Classic)
+
+  几何与惯性参数来自 ROS 1 工程 pudong 包的真实 CAD 模型
+  (ROS-based-autonomous-navigation-and-excavation-control-for-excavators)，
+  网格为 CAD 导出的 STL，单位米。
+
+  相对原模型的改动:
+    1. 关节改成可读命名，并在注释里保留原名对照
+    2. 增加 bucket_tip —— 铲斗齿尖坐标系，作为笛卡尔作业的目标点
+    3. 液压缸用 mimic 关节跟随对应主关节(线性近似, 见下方说明)
+    4. 补 <ros2_control> 硬件接口(Gazebo 用)与 <gazebo> 材质
+
+  运动链:
+    world ==(fixed)==> base_link(履带底盘)
+      ==swing_joint(回转, 绕 z)==> swing_link(回转平台)
+        ==boom_joint(动臂, 绕 y)==> boom_link
+          ==stick_joint(斗杆, 绕 y)==> stick_link
+            ==bucket_joint(铲斗, 绕 y)==> bucket_link
+              ==(fixed)==> bucket_tip
+-->
+<robot name="excavator" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Gazebo 仿真时才注入 ros2_control 插件; 控制器参数文件由 launch 传入 -->
+  <xacro:arg name="use_gazebo" default="false"/>
+  <xacro:arg name="controllers_file" default=""/>
+
+  <!-- ======================================================================
+       1. 参数
+       ====================================================================== -->
+  <xacro:property name="mesh_dir" value="package://excavator_description/meshes"/>
+
+  <!-- 主关节限位 (取自原模型) -->
+  <xacro:property name="swing_lower"  value="-6.2832"/>
+  <xacro:property name="swing_upper"  value="6.2832"/>
+  <xacro:property name="boom_lower"   value="-0.9"/>
+  <xacro:property name="boom_upper"   value="0.35"/>
+  <xacro:property name="stick_lower"  value="-0.8"/>
+  <xacro:property name="stick_upper"  value="1.0"/>
+  <xacro:property name="bucket_lower" value="-1.4"/>
+  <xacro:property name="bucket_upper" value="1.2"/>
+
+  <!--
+    铲斗齿尖在 bucket_link 坐标系中的位置。
+    由 bucket_link 的网格包围盒(x∈[-0.164,1.800])估计, 取最外缘处。
+    用 xacro 参数单独列出, 便于在 rviz 里对着实物网格微调。
+  -->
+  <xacro:property name="bucket_tip_xyz" value="1.800 0 -0.060"/>
+
+  <!-- 颜色 -->
+  <material name="excavator_yellow"><color rgba="1.0 0.75 0.0 1.0"/></material>
+  <material name="excavator_orange"><color rgba="1.0 0.50 0.0 1.0"/></material>
+  <material name="excavator_green"><color rgba="0.0 0.67 0.0 1.0"/></material>
+  <material name="excavator_grey"><color rgba="0.53 0.55 0.55 1.0"/></material>
+  <material name="excavator_blue"><color rgba="0.79 0.82 0.93 1.0"/></material>
+  <material name="cylinder_body"><color rgba="0.35 0.35 0.38 1.0"/></material>
+  <material name="cylinder_rod"><color rgba="0.85 0.85 0.88 1.0"/></material>
+
+  <!-- ======================================================================
+       2. 通用宏
+       ====================================================================== -->
+
+  <!-- 单个连杆: 网格 + 惯性。visual_only:=true 时不生成碰撞体(用于液压缸等纯装饰件) -->
+  <xacro:macro name="excavator_link" params="name mesh mass ixx iyy izz color com:='0 0 0' visual_only:=false">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="${com}" rpy="0 0 0"/>
+        <mass value="${mass}"/>
+        <inertia ixx="${ixx}" ixy="0.0" ixz="0.0" iyy="${iyy}" iyz="0.0" izz="${izz}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_dir}/${mesh}"/></geometry>
+        <material name="${color}"/>
+      </visual>
+      <xacro:unless value="${visual_only}">
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><mesh filename="${mesh_dir}/${mesh}"/></geometry>
+        </collision>
+      </xacro:unless>
+    </link>
+  </xacro:macro>
+
+  <!-- 液压缸: 缸体(revolute, 挂在 parent 上) + 活塞杆(prismatic, 从缸体伸出) -->
+  <!-- 缸体在 parent 坐标系里的位姿 / 活塞杆在缸体坐标系里的位姿, 均取自原模型 -->
+  <xacro:macro name="hydraulic_cylinder"
+               params="name parent body_mesh rod_mesh body_xyz body_rpy body_lower body_upper
+                       rod_xyz rod_lower rod_upper">
+    <link name="${name}_body">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/><mass value="1.0"/>
+        <inertia ixx="0.02" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.005"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_dir}/${body_mesh}"/></geometry>
+        <material name="cylinder_body"/>
+      </visual>
+    </link>
+    <joint name="${name}_body_joint" type="revolute">
+      <origin xyz="${body_xyz}" rpy="${body_rpy}"/>
+      <parent link="${parent}"/>
+      <child link="${name}_body"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="-2.0" upper="2.0" effort="5000" velocity="4"/>
+    </joint>
+
+    <link name="${name}_rod">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/><mass value="1.0"/>
+        <inertia ixx="0.02" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.005"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_dir}/${rod_mesh}"/></geometry>
+        <material name="cylinder_rod"/>
+      </visual>
+    </link>
+    <joint name="${name}_rod_joint" type="prismatic">
+      <origin xyz="${rod_xyz}" rpy="0 0 0"/>
+      <parent link="${name}_body"/>
+      <child link="${name}_rod"/>
+      <axis xyz="0 0 -1"/>
+      <limit lower="-2.0" upper="2.0" effort="5000" velocity="4"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- ======================================================================
+       3. 本体
+       ====================================================================== -->
+  <link name="world"/>
+
+  <!-- 履带底盘 (原 base_link) -->
+  <xacro:excavator_link name="base_link" mesh="base_link.STL" mass="10000"
+                        ixx="10833.3" iyy="10833.3" izz="20000.0" com="0 0 0.19446"
+                        color="excavator_blue"/>
+
+  <!-- 履带底面在 base_link 下方 0.397 m, 这里把底盘抬起来, 使 world 的 z=0 就是地面 -->
+  <joint name="world_to_base_link" type="fixed">
+    <origin xyz="0 0 0.397" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child link="base_link"/>
+  </joint>
+
+  <!-- 回转平台 (原 cheshen) -->
+  <xacro:excavator_link name="swing_link" mesh="cheshen.STL" mass="3000"
+                        ixx="2250" iyy="2250" izz="3375" color="excavator_yellow"/>
+
+  <joint name="swing_joint" type="revolute">
+    <origin xyz="0 0 0.72" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="swing_link"/>
+    <axis xyz="0 0 -1"/>
+    <limit lower="${swing_lower}" upper="${swing_upper}" effort="5000" velocity="0.5"/>
+    <dynamics damping="1.0" friction="40.0"/>
+  </joint>
+
+  <!-- 动臂 (原 pjjq03) -->
+  <xacro:excavator_link name="boom_link" mesh="pjjq03.STL" mass="1440.8"
+                        ixx="321.25" iyy="3009.3" izz="2727.5" com="2.2911 0 1.2825"
+                        color="excavator_orange"/>
+
+  <joint name="boom_joint" type="revolute">
+    <origin xyz="-0.009 0 1.0372" rpy="0 0 0"/>
+    <parent link="swing_link"/>
+    <child link="boom_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${boom_lower}" upper="${boom_upper}" effort="5000" velocity="0.3"/>
+    <dynamics damping="1.0" friction="80.0"/>
+  </joint>
+
+  <!-- 斗杆 (原 pjjq04) -->
+  <xacro:excavator_link name="stick_link" mesh="pjjq04.STL" mass="600.4"
+                        ixx="26.656" iyy="564.47" izz="545.68" com="0.9223 0 0.24134"
+                        color="excavator_green"/>
+
+  <joint name="stick_joint" type="revolute">
+    <origin xyz="5.4177 0 1.706" rpy="0 1.2726 0"/>
+    <parent link="boom_link"/>
+    <child link="stick_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${stick_lower}" upper="${stick_upper}" effort="5000" velocity="0.4"/>
+    <dynamics damping="1.0" friction="80.0"/>
+  </joint>
+
+  <!-- 铲斗 (原 chandou) -->
+  <xacro:excavator_link name="bucket_link" mesh="chandou.STL" mass="359.5"
+                        ixx="94.627" iyy="138.37" izz="169.06" com="0.72017 0 0.569"
+                        color="excavator_grey"/>
+
+  <joint name="bucket_joint" type="revolute">
+    <origin xyz="2.9111 0 0.15097" rpy="0 1.4717 0"/>
+    <parent link="stick_link"/>
+    <child link="bucket_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${bucket_lower}" upper="${bucket_upper}" effort="5000" velocity="0.5"/>
+    <dynamics damping="1.0" friction="80.0"/>
+  </joint>
+
+  <!-- 铲斗连杆 (原 pjjq06), 随铲斗转动 -->
+  <xacro:excavator_link name="bucket_linkage" mesh="pjjq06.STL" mass="1.973"
+                        ixx="1.2029" iyy="1.0753" izz="0.1691" com="0 0 -0.314"
+                        color="excavator_grey" visual_only="true"/>
+  <joint name="bucket_linkage_joint" type="revolute">
+    <origin xyz="-0.10419 0 0.59088" rpy="0 0.53327 0"/>
+    <parent link="bucket_link"/>
+    <child link="bucket_linkage"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="-3.0" upper="3.0" effort="5000" velocity="1.0"/>
+  </joint>
+
+  <!-- 铲斗齿尖: 笛卡尔作业的目标点坐标系 -->
+  <link name="bucket_tip"/>
+  <joint name="bucket_tip_joint" type="fixed">
+    <origin xyz="${bucket_tip_xyz}" rpy="0 0 0"/>
+    <parent link="bucket_link"/>
+    <child link="bucket_tip"/>
+  </joint>
+
+  <!-- ======================================================================
+       4. 液压缸
+
+       液压缸是**闭环机构**: 缸体铰点固定在父连杆上, 活塞杆末端铰点固定在
+       目标连杆上, 两点距离决定缸长。真实关系是余弦(四连杆)非线性的。
+
+       ⚠️ 这里**不能用 URDF 的 <mimic>**。两个原因:
+         1. <mimic> 只能表达线性关系, 而这个关系是弯的;
+         2. 更致命的是 —— sdformat 的 URDF→SDF 转换**会把 <mimic> 整个丢掉**
+            (实测: URDF 里 11 个 mimic, 转换出的 SDF 里 0 个)。
+            结果 rviz 里正常(robot_state_publisher 支持 mimic), Gazebo 里这些
+            关节全成了自由关节, 被重力乱甩、还通过关节反力把整个臂带偏。
+
+       所以改成: 这些关节纳入 ros2_control, 由 excavator_control 的
+       hydraulic_driver 节点按几何闭合**精确驱动**(比线性拟合还准)。
+
+         节点用的几何常数由 tools/fit_mimic.py 解出, 见 hydraulic_driver.py 顶部。
+
+       这些缸不参与运动学, 没有碰撞体, 不影响规划与控制。
+       ====================================================================== -->
+
+  <!-- 动臂液压缸 x2 (原 yg1220_1 / yg1220_2), 铰点接在 boom_link 上 -->
+  <xacro:macro name="boom_cylinder" params="name y body_mesh rod_mesh">
+    <xacro:hydraulic_cylinder
+      name="${name}" parent="swing_link" body_mesh="${body_mesh}" rod_mesh="${rod_mesh}"
+      body_xyz="0.461 ${y} 0.44" body_rpy="0 0.55538 0" body_lower="-0.35" body_upper="0.5"
+      rod_xyz="0 0 0.95471" rod_lower="-0.42" rod_upper="0.8"/>
+  </xacro:macro>
+  <xacro:boom_cylinder name="boom_cyl_l" y="0.31"
+                       body_mesh="yg1220_1_1.STL" rod_mesh="yg1220_1_2.STL"/>
+  <xacro:boom_cylinder name="boom_cyl_r" y="-0.31"
+                       body_mesh="yg1220_2_1.STL" rod_mesh="yg1220_2_2.STL"/>
+
+  <!-- 斗杆液压缸 (原 yg1480), 铰点接在 stick_link 上 -->
+  <xacro:hydraulic_cylinder
+    name="stick_cyl" parent="boom_link" body_mesh="yg1480.STL" rod_mesh="yg1480_2.STL"
+    body_xyz="2.7108 0 2.1303" body_rpy="0 1.4036 0" body_lower="-0.2" body_upper="0.2"
+    rod_xyz="0 0 0.7811" rod_lower="-0.88" rod_upper="0.6"/>
+
+  <!-- 铲斗液压缸 (原 yg1050) -->
+  <xacro:hydraulic_cylinder
+    name="bucket_cyl" parent="stick_link" body_mesh="yg1050.STL" rod_mesh="yg1050_2.STL"
+    body_xyz="0.40628 0 0.76931" body_rpy="-3.1416 1.4945 -3.1416" body_lower="-0.1" body_upper="0.3"
+    rod_xyz="0 0 1.0701" rod_lower="-0.1" rod_upper="0.95"/>
+
+  <!-- 斗杆摇杆 x2 (原 pjjq05_1 / pjjq05_2), 由 bucket_joint 驱动 -->
+  <xacro:macro name="stick_rocker" params="name y">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/><mass value="1.0"/>
+        <inertia ixx="0.3" ixy="0" ixz="0" iyy="0.3" iyz="0" izz="0.05"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_dir}/pjjq05_1.STL"/></geometry>
+        <material name="excavator_grey"/>
+      </visual>
+    </link>
+    <joint name="${name}_joint" type="revolute">
+      <origin xyz="2.4617 ${y} 0.17367" rpy="0 0.84777 0"/>
+      <parent link="stick_link"/>
+      <child link="${name}"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="-3.0" upper="3.0" effort="5000" velocity="1.0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:stick_rocker name="stick_rocker_l" y="-0.17"/>
+  <xacro:stick_rocker name="stick_rocker_r" y="0.17"/>
+
+  <!-- ======================================================================
+       5. Gazebo
+       ====================================================================== -->
+  <!-- 履带与地面的摩擦 -->
+  <gazebo reference="base_link">
+    <mu1>0.9</mu1>
+    <mu2>0.9</mu2>
+  </gazebo>
+
+  <!-- 上面 <ros2_control> 里声明的硬件接口由这个插件接管 -->
+  <xacro:if value="$(arg use_gazebo)">
+    <gazebo>
+      <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+        <parameters>$(arg controllers_file)</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+  <!-- ======================================================================
+       6. ros2_control 硬件接口 (4 个主动关节位置控制)
+
+       initial_value 是各关节的初始角度, 挖机开机时停在"准备作业"位——
+       没有它的话, 控制器接管之前手臂会在重力下掉到机械限位上, 变成一个
+       退化位形(铲斗卡在行程终点), 后续逆解会很难做。
+       ====================================================================== -->
+  <ros2_control name="ExcavatorSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <joint name="swing_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="boom_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.35</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="stick_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.45</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="bucket_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+
+    <!-- 液压缸/摇杆: 既不参与运动学也不参与规划, 但必须有 command interface,
+         否则在 Gazebo 里是自由关节(会乱甩)。值由 hydraulic_driver 节点按几何
+         闭合算出后经 excavator_hydraulics_controller 下发。
+         initial_value 是 home 位对应的精确值。 -->
+    <joint name="boom_cyl_l_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.30301</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="boom_cyl_l_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.23228</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="boom_cyl_r_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.30301</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="boom_cyl_r_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.23228</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_cyl_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.04501</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_cyl_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.36905</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="bucket_cyl_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.08259</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="bucket_cyl_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.11620</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_rocker_l_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_rocker_r_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="bucket_linkage_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+</robot>
