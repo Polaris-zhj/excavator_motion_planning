@@ -28,7 +28,7 @@ target_include_directories(excavator_planning PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(excavator_planning PUBLIC excavator_common)
+ament_target_dependencies(excavator_planning excavator_common)
 target_compile_options(excavator_planning PRIVATE -Wall -Wextra -Wpedantic)
 
 if(BUILD_TESTING)
