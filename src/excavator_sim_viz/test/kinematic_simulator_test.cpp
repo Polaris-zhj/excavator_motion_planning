@@ -28,6 +28,17 @@ TEST(KinematicSimulatorTest, StepsAlongSubmittedTrajectory) {
   EXPECT_FALSE(state.trajectory_active);
 }
 
+TEST(KinematicSimulatorTest, RejectsDiscontinuousReplacement) {
+  KinematicSimulator simulator({"joint_a"}, {0.0});
+  ASSERT_TRUE(simulator.SubmitTrajectory(MakeTrajectory()).ok);
+  SimulationState state;
+  ASSERT_TRUE(simulator.Step(0.5, &state).ok);
+
+  auto replacement = MakeTrajectory();
+  replacement.points.front().positions[0] = -0.5;
+  EXPECT_FALSE(simulator.SubmitTrajectory(replacement).ok);
+}
+
 TEST(KinematicSimulatorTest, RejectsDifferentJointOrdering) {
   KinematicSimulator simulator({"joint_a", "joint_b"}, {0.0, 0.0});
   EXPECT_FALSE(simulator.SubmitTrajectory(MakeTrajectory()).ok);
