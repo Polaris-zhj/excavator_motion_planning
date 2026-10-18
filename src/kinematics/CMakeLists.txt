@@ -19,7 +19,7 @@ target_include_directories(kinematics PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(kinematics PUBLIC Eigen3::Eigen)
+target_link_libraries(kinematics Eigen3::Eigen)
 ament_target_dependencies(kinematics urdf excavator_common)
 target_compile_options(kinematics PRIVATE -Wall -Wextra -Wpedantic)
 
