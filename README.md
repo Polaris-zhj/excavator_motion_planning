@@ -36,7 +36,7 @@ Install dependencies and build:
 ```bash
 sudo apt update
 sudo apt install ros-humble-desktop ros-humble-urdf ros-humble-xacro \
-  ros-humble-robot-state-publisher ros-humble-rviz2 ros-humble-eigen
+  ros-humble-robot-state-publisher ros-humble-rviz2 libeigen3-dev
 source /opt/ros/humble/setup.bash
 mkdir -p ~/excavator_ws/src
 cd ~/excavator_ws/src
