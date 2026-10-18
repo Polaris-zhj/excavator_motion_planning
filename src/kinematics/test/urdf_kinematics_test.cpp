@@ -43,6 +43,25 @@ TEST_F(UrdfKinematicsTest, ComputesGeometricJacobian) {
   EXPECT_NEAR(jacobian.rows[5][0], 1.0, 1.0e-8);
 }
 
+TEST_F(UrdfKinematicsTest, SolvesConsistentInverseKinematicsTarget) {
+  constexpr double kTargetAngle = 0.5;
+  Pose3 target;
+  target.position = {1.0 + std::cos(kTargetAngle), std::sin(kTargetAngle), 0.0};
+  target.orientation = {0.0, 0.0, std::sin(kTargetAngle / 2.0),
+                        std::cos(kTargetAngle / 2.0)};
+
+  InverseKinematicsOptions options;
+  options.max_iterations = 100;
+  options.position_tolerance = 1.0e-6;
+  options.orientation_tolerance = 1.0e-6;
+  options.damping = 1.0e-4;
+  const auto result = model_->SolveIK(target, "tool", {0.2}, options);
+
+  ASSERT_TRUE(result.success) << result.message;
+  ASSERT_EQ(result.joint_positions.size(), 1U);
+  EXPECT_NEAR(result.joint_positions[0], kTargetAngle, 1.0e-4);
+}
+
 TEST_F(UrdfKinematicsTest, RejectsWrongJointDimension) {
   Pose3 pose;
   const ValidationResult result =
