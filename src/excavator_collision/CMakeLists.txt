@@ -31,6 +31,7 @@ if(BUILD_TESTING)
   ament_add_gtest(collision_checker_test test/collision_checker_test.cpp)
   target_compile_definitions(collision_checker_test PRIVATE
     TEST_MESH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/tetrahedron.stl")
+  ament_target_dependencies(collision_checker_test excavator_interfaces)
   target_link_libraries(collision_checker_test excavator_collision)
 endif()
 
