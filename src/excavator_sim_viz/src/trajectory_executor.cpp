@@ -4,6 +4,7 @@
 #include <mutex>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "builtin_interfaces/msg/duration.hpp"
 #include "excavator_common/joint_trajectory.hpp"
