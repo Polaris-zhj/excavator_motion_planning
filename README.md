@@ -113,6 +113,23 @@ ros2 action send_goal /plan_trajectory excavator_interfaces/action/PlanTrajector
 
 规划结果可发布到 `/joint_trajectory` 播放，或交给 `/execute_trajectory` Action 执行。执行 Action 默认要求显式确认（参数 `require_confirmation: true`），并会检查轨迹起点与当前关节状态是否连续；任一关节起点偏差超过约 0.05 rad 时会拒绝执行。
 
+### 通过执行 Action 播放规划结果
+
+先启动第 4 节中的模型与仿真节点。执行请求必须显式设置 `require_confirmation: true`，并且轨迹的第一个点应与当前模型关节位置连续。以下示例仅演示 Action 调用格式，目标轨迹数值需要根据当前姿态调整：
+
+```bash
+ros2 action send_goal /execute_trajectory excavator_interfaces/action/ExecuteTrajectory \
+"{require_confirmation: true, trajectory: {
+  joint_names: [swing_joint, boom_joint, stick_joint, bucket_joint],
+  points: [
+    {positions: [0.0, -0.35, 0.45, -0.4], time_from_start: {sec: 0, nanosec: 0}},
+    {positions: [0.2, -0.3, 0.4, -0.3], time_from_start: {sec: 3, nanosec: 0}}
+  ]
+}}"
+```
+
+Action 会反馈执行进度。可通过取消 Action 请求停止当前轨迹；播放器会冻结在取消时的当前关节位置。该机制仅用于仿真轨迹播放，不等同于真实设备的安全急停。
+
 ## 6. 运动学接口示例
 
 `kinematics` 包可以从展开后的 URDF XML 或 URDF 文件加载模型。存在 `base_link` 时，FK 以 `base_link` 为参考系；运动学调用不需要维护可变的“当前关节状态”。
