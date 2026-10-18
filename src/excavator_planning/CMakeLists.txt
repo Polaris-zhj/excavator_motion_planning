@@ -16,12 +16,13 @@ find_package(trajectory_msgs REQUIRED)
 find_package(excavator_interfaces REQUIRED)
 find_package(kinematics REQUIRED)
 find_package(excavator_common REQUIRED)
+find_package(excavator_collision REQUIRED)
 
 add_library(excavator_planning src/baseline_planners.cpp)
 
 add_executable(planning_server src/planning_server.cpp)
 ament_target_dependencies(planning_server rclcpp rclcpp_action builtin_interfaces
-  sensor_msgs trajectory_msgs excavator_interfaces)
+  sensor_msgs trajectory_msgs excavator_interfaces excavator_collision)
 target_link_libraries(planning_server excavator_planning kinematics)
 target_compile_options(planning_server PRIVATE -Wall -Wextra -Wpedantic)
 target_include_directories(excavator_planning PUBLIC
@@ -45,5 +46,5 @@ install(TARGETS excavator_planning EXPORT excavator_planningTargets
 install(DIRECTORY include/ DESTINATION include)
 ament_export_targets(excavator_planningTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
-ament_export_dependencies(excavator_common)
+ament_export_dependencies(excavator_common excavator_collision)
 ament_package()
