@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 namespace tramcar {
 namespace planning {
 namespace {
