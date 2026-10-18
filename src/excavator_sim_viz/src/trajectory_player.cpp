@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <builtin_interfaces/msg/duration.hpp>
 #include <chrono>
 #include <cmath>
 #include <memory>
@@ -9,29 +8,48 @@
 #include <utility>
 #include <vector>
 
+#include "builtin_interfaces/msg/duration.hpp"
+#include "excavator_sim_viz/kinematic_simulator.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
-#include "trajectory_msgs/msg/joint_trajectory_point.hpp"
 
 namespace excavator_sim_viz {
 namespace {
 
 using Clock = std::chrono::steady_clock;
-using JointTrajectory = trajectory_msgs::msg::JointTrajectory;
-using JointTrajectoryPoint = trajectory_msgs::msg::JointTrajectoryPoint;
+using JointTrajectoryMessage = trajectory_msgs::msg::JointTrajectory;
 
 double ToSeconds(const builtin_interfaces::msg::Duration& duration) {
   return static_cast<double>(duration.sec) +
          static_cast<double>(duration.nanosec) * 1.0e-9;
 }
 
+tramcar::planning::JointTrajectory ToCoreTrajectory(
+    const JointTrajectoryMessage& message) {
+  tramcar::planning::JointTrajectory trajectory;
+  trajectory.joint_names = message.joint_names;
+  trajectory.points.reserve(message.points.size());
+  for (const auto& message_point : message.points) {
+    tramcar::planning::JointTrajectoryPoint point;
+    point.t = ToSeconds(message_point.time_from_start);
+    point.positions = message_point.positions;
+    point.velocities = message_point.velocities;
+    point.accelerations = message_point.accelerations;
+    trajectory.points.push_back(std::move(point));
+  }
+  return trajectory;
+}
+
 }  // namespace
 
 class TrajectoryPlayer final : public rclcpp::Node {
  public:
-  TrajectoryPlayer() : Node("excavator_trajectory_player") {
-    const auto publish_rate_hz =
+  TrajectoryPlayer()
+      : Node("excavator_trajectory_player"),
+        simulator_({"swing_joint", "boom_joint", "stick_joint", "bucket_joint"},
+                   {0.0, -0.35, 0.45, -0.4}) {
+    const double publish_rate_hz =
         declare_parameter<double>("publish_rate_hz", 50.0);
     passive_joint_names_ = declare_parameter<std::vector<std::string>>(
         "passive_joint_names",
@@ -43,9 +61,9 @@ class TrajectoryPlayer final : public rclcpp::Node {
 
     joint_state_publisher_ =
         create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
-    trajectory_subscription_ = create_subscription<JointTrajectory>(
+    trajectory_subscription_ = create_subscription<JointTrajectoryMessage>(
         "/joint_trajectory", 10,
-        [this](JointTrajectory::ConstSharedPtr message) {
+        [this](JointTrajectoryMessage::ConstSharedPtr message) {
           ReceiveTrajectory(std::move(message));
         });
 
@@ -53,105 +71,59 @@ class TrajectoryPlayer final : public rclcpp::Node {
     timer_ = create_wall_timer(
         std::chrono::duration_cast<std::chrono::nanoseconds>(period),
         [this]() { PublishCurrentState(); });
+    last_step_ = Clock::now();
 
     RCLCPP_INFO(get_logger(),
-                "Trajectory player ready; subscribe to /joint_trajectory and "
-                "publishes /joint_states at %.1f Hz",
+                "Kinematic simulator ready: /joint_trajectory -> /joint_states "
+                "(%.1f Hz)",
                 publish_rate_hz);
   }
 
  private:
-  void ReceiveTrajectory(JointTrajectory::ConstSharedPtr message) {
-    if (message->joint_names.empty() || message->points.empty()) {
-      RCLCPP_WARN(get_logger(),
-                  "Ignoring trajectory with empty joint_names or points");
+  void ReceiveTrajectory(JointTrajectoryMessage::ConstSharedPtr message) {
+    auto trajectory = ToCoreTrajectory(*message);
+    const auto validation = tramcar::planning::ValidateJointTrajectory(trajectory);
+    if (!validation.ok) {
+      RCLCPP_WARN(get_logger(), "Rejected trajectory: %s",
+                  validation.message.c_str());
       return;
     }
 
-    double previous_time = -1.0;
-    for (const JointTrajectoryPoint& point : message->points) {
-      const double time = ToSeconds(point.time_from_start);
-      if (!std::isfinite(time) || time < 0.0 ||
-          (previous_time >= 0.0 && time <= previous_time) ||
-          point.positions.size() != message->joint_names.size()) {
-        RCLCPP_WARN(get_logger(),
-                    "Ignoring malformed trajectory: times must increase and "
-                    "each positions array must match joint_names");
-        return;
-      }
-      for (double position : point.positions) {
-        if (!std::isfinite(position)) {
-          RCLCPP_WARN(get_logger(),
-                      "Ignoring trajectory containing a non-finite position");
-          return;
-        }
-      }
-      previous_time = time;
-    }
-
     std::lock_guard<std::mutex> lock(mutex_);
-    trajectory_ = *message;
-    trajectory_start_ = Clock::now();
-    has_trajectory_ = true;
+    const auto result = simulator_.SubmitTrajectory(trajectory);
+    if (!result.ok) {
+      RCLCPP_WARN(get_logger(), "Rejected trajectory: %s",
+                  result.message.c_str());
+      return;
+    }
+    last_step_ = Clock::now();
     RCLCPP_INFO(get_logger(), "Accepted trajectory with %zu joints and %zu points",
-                trajectory_.joint_names.size(), trajectory_.points.size());
+                trajectory.joint_names.size(), trajectory.points.size());
   }
 
   void PublishCurrentState() {
-    JointTrajectory trajectory;
-    Clock::time_point start;
-    bool has_trajectory = false;
+    const auto current_time = Clock::now();
+    const double dt =
+        std::chrono::duration<double>(current_time - last_step_).count();
+    last_step_ = current_time;
+
+    SimulationState simulation_state;
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      has_trajectory = has_trajectory_;
-      if (has_trajectory) {
-        trajectory = trajectory_;
-        start = trajectory_start_;
-      }
-    }
-    if (!has_trajectory) {
-      trajectory.joint_names = {"swing_joint", "boom_joint", "stick_joint",
-                                "bucket_joint"};
-      trajectory.points.resize(1);
-      trajectory.points.front().positions = {0.0, 0.0, 0.0, 0.0};
-    }
-
-    const double elapsed = has_trajectory
-                               ? std::chrono::duration<double>(
-                                     Clock::now() - start).count()
-                               : 0.0;
-    const auto& points = trajectory.points;
-    std::vector<double> positions = points.front().positions;
-    std::vector<double> velocities(trajectory.joint_names.size(), 0.0);
-
-    if (!has_trajectory ||
-        elapsed >= ToSeconds(points.back().time_from_start)) {
-      positions = points.back().positions;
-    } else {
-      for (std::size_t index = 1; index < points.size(); ++index) {
-        const double t0 = ToSeconds(points[index - 1].time_from_start);
-        const double t1 = ToSeconds(points[index].time_from_start);
-        if (elapsed <= t1) {
-          const double duration = t1 - t0;
-          const double ratio =
-              std::clamp((elapsed - t0) / duration, 0.0, 1.0);
-          for (std::size_t joint = 0; joint < positions.size(); ++joint) {
-            const double delta = points[index].positions[joint] -
-                                 points[index - 1].positions[joint];
-            positions[joint] =
-                points[index - 1].positions[joint] + ratio * delta;
-            velocities[joint] = delta / duration;
-          }
-          break;
-        }
+      const auto result = simulator_.Step(dt, &simulation_state);
+      if (!result.ok) {
+        RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000,
+                              "Simulator step failed: %s",
+                              result.message.c_str());
+        return;
       }
     }
 
     sensor_msgs::msg::JointState state;
     state.header.stamp = now();
-    state.name = trajectory.joint_names;
-    state.position = std::move(positions);
-    state.velocity = std::move(velocities);
+    state.name = simulation_state.joint_names;
+    state.position = simulation_state.positions;
+    state.velocity = simulation_state.velocities;
     for (const std::string& joint_name : passive_joint_names_) {
       if (std::find(state.name.begin(), state.name.end(), joint_name) ==
           state.name.end()) {
@@ -165,13 +137,13 @@ class TrajectoryPlayer final : public rclcpp::Node {
 
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr
       joint_state_publisher_;
-  rclcpp::Subscription<JointTrajectory>::SharedPtr trajectory_subscription_;
+  rclcpp::Subscription<JointTrajectoryMessage>::SharedPtr
+      trajectory_subscription_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::mutex mutex_;
-  JointTrajectory trajectory_;
+  KinematicSimulator simulator_;
   std::vector<std::string> passive_joint_names_;
-  Clock::time_point trajectory_start_{};
-  bool has_trajectory_{false};
+  Clock::time_point last_step_{};
 };
 
 }  // namespace excavator_sim_viz
