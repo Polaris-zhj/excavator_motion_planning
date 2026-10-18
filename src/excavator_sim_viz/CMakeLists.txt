@@ -19,6 +19,6 @@ target_link_libraries(trajectory_player excavator_common)
 target_compile_options(trajectory_player PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS trajectory_player DESTINATION lib/${PROJECT_NAME})
-install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
 ament_package()
