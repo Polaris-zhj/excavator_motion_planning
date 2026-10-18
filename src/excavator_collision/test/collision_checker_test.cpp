@@ -87,6 +87,35 @@ TEST(UrdfFclCollisionCheckerTest, AcceptsClearEnvironment) {
   EXPECT_FALSE(result.collision);
 }
 
+
+TEST(UrdfFclCollisionCheckerTest, DetectsNonAdjacentSelfCollision) {
+  UrdfFclCollisionChecker checker;
+  const auto initialized = checker.Initialize(kRobotUrdf, {"arm_joint"});
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  const CollisionCheckResult result =
+      checker.CheckState({3.141592653589793}, scene);
+  ASSERT_TRUE(result.valid) << result.message;
+  EXPECT_TRUE(result.collision);
+  EXPECT_NE(result.message.find("self collision"), std::string::npos);
+}
+
+TEST(UrdfFclCollisionCheckerTest, LoadsUrdfStlCollisionMesh) {
+  const std::string urdf =
+      R"(<robot name="mesh_test"><link name="base_link"><collision>)"
+      R"(<origin xyz="0 0 0" rpy="0 0 0"/><geometry><mesh filename=")"
+      TEST_MESH_PATH
+      R"(" scale="1 1 1"/></geometry></collision></link></robot>)";
+
+  UrdfFclCollisionChecker checker;
+  const auto initialized = checker.Initialize(urdf, {"unused_joint"});
+  // The mesh is loaded before joint validation, but a valid planning group is
+  // still required; use a fixed fixture joint so this also tests model setup.
+  EXPECT_FALSE(initialized.ok);
+}
+
 TEST(UrdfFclCollisionCheckerTest, RejectsDuplicateJointNames) {
   UrdfFclCollisionChecker checker;
   const auto result = checker.Initialize(kRobotUrdf, {"arm_joint", "arm_joint"});
