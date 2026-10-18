@@ -10,6 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(urdf REQUIRED)
+find_package(excavator_common REQUIRED)
 
 add_library(kinematics
   src/urdf_kinematics_model.cpp
@@ -19,7 +20,7 @@ target_include_directories(kinematics PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(kinematics PUBLIC Eigen3::Eigen)
-ament_target_dependencies(kinematics urdf)
+ament_target_dependencies(kinematics urdf excavator_common)
 target_compile_options(kinematics PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS kinematics EXPORT kinematicsTargets
@@ -30,5 +31,5 @@ install(TARGETS kinematics EXPORT kinematicsTargets
 install(DIRECTORY include/ DESTINATION include)
 ament_export_targets(kinematicsTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
-ament_export_dependencies(Eigen3 urdf)
+ament_export_dependencies(Eigen3 urdf excavator_common)
 ament_package()
