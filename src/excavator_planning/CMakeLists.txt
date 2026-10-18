@@ -23,7 +23,7 @@ add_library(excavator_planning src/baseline_planners.cpp)
 add_executable(planning_server src/planning_server.cpp)
 ament_target_dependencies(planning_server rclcpp rclcpp_action builtin_interfaces
   sensor_msgs trajectory_msgs excavator_interfaces excavator_collision)
-target_link_libraries(planning_server excavator_planning kinematics)
+target_link_libraries(planning_server excavator_planning kinematics\n  excavator_collision)
 target_compile_options(planning_server PRIVATE -Wall -Wextra -Wpedantic)
 target_include_directories(excavator_planning PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
