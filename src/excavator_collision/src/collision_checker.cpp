@@ -567,6 +567,26 @@ ValidationResult UrdfFclCollisionChecker::Initialize(
       stack.push_back(child);
     }
   }
+  if (impl_->links.empty()) {
+    return {false, "URDF has no supported collision geometry"};
+  }
+
+  // A moving joint outside the configured group must not silently freeze a
+  // collision-bearing link at q=0. This catches incomplete planning groups.
+  for (const auto& collision_link : impl_->links) {
+    auto current = collision_link.link;
+    while (current && current->parent_joint) {
+      const auto& joint = current->parent_joint;
+      if (IsMovable(joint) &&
+          impl_->joint_indices.find(joint->name) == impl_->joint_indices.end()) {
+        return {false, "collision-bearing link " + collision_link.name +
+                           " depends on unconfigured movable joint " +
+                           joint->name};
+      }
+      current = impl_->model.getLink(joint->parent_link_name);
+    }
+  }
+
   impl_->initialized = true;
   return {true, ""};
 }
