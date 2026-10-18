@@ -1,106 +1,106 @@
 # Excavator Motion Planning
 
-A ROS 2 Humble / C++17 framework for excavator kinematic simulation and replaceable joint-space planning interfaces.
+A ROS 2 Humble / C++17 framework for excavator kinematic simulation and replaceable joint-space planning interfaces. The project follows Google C++ Style and does not require MoveIt 2 at runtime.
 
-The first milestone deliberately focuses on **kinematic motion only**. Hydraulic cylinder motion, hydraulic pressure/flow, rigid-body dynamics, soil interaction, and a runtime dependency on MoveIt 2 are out of scope.
+The first milestone is **kinematic simulation**, not hydraulic or rigid-body dynamics. Hydraulic cylinder actuation, hydraulic pressure/flow, soil contact, and dynamics are intentionally out of scope.
 
-## Design principles
+## Model included in this repository
 
-- C++17 and Google C++ Style.
-- Keep planning algorithms behind interfaces so RRT/RRT*/PRM or a custom planner can be swapped without changing the simulator.
-- Keep model-dependent configuration separate from generic trajectory data.
-- Use ROS 2 `sensor_msgs/msg/JointState` for simulated joint state; `robot_state_publisher` derives TF from the robot description.
-- Use the model's four primary planning joints: `swing_joint`, `boom_joint`, `stick_joint`, and `bucket_joint`. The model also contains visual hydraulic-cylinder and linkage joints; these are not part of the first planning group.
-- The source model includes a `bucket_tip` frame for Cartesian work targets. Validate the exact geometry and joint limits in RViz before relying on it for production planning.
+The `excavator_description` package is included under `src/excavator_description/`, including the URDF/Xacro and mesh assets. The description declares the four primary planning joints:
 
-## Repositories
+- `swing_joint`
+- `boom_joint`
+- `stick_joint`
+- `bucket_joint`
 
-- This code: https://github.com/Polaris-zhj/excavator_motion_planning
-- Robot description and mesh assets: https://github.com/Polaris-zhj/ws_excavator
+The Xacro also defines the `bucket_tip` frame for end-effector queries. The original model's package metadata declares BSD-3-Clause; see [model attribution and licensing](src/excavator_description/NOTICE.md). Most mesh assets were copied from [Polaris-zhj/ws_excavator](https://github.com/Polaris-zhj/ws_excavator). The source `base_link.STL` was too large for the available GitHub content transfer path, so the migrated package currently uses a small generated chassis/track approximation at that filename. Replace it with the original CAD mesh when transferring the full source file through a local Git clone.
 
-Clone both repositories into the same ROS 2 workspace so the model's `excavator_description` package and mesh resources are available:
+## Packages
 
-```bash
-mkdir -p ~/excavator_ws/src
-cd ~/excavator_ws/src
-git clone https://github.com/Polaris-zhj/excavator_motion_planning.git
-git clone https://github.com/Polaris-zhj/ws_excavator.git
-```
+- `excavator_description`: URDF/Xacro and meshes.
+- `excavator_common`: `JointPath`, `JointTrajectory`, validation helpers, and replaceable planner interfaces.
+- `kinematics`: stateless URDF-backed FK, geometric Jacobian, and damped-least-squares IK.
+- `excavator_planning`: baseline straight-line joint-space path planner, conservative segment time assignment, and trajectory sampler.
+- `excavator_sim_viz`: trajectory playback via `/joint_trajectory` and `/joint_states`, plus RViz launch configuration.
 
-## Workspace layout
+The straight-line planner is a baseline only: it does not perform collision avoidance. The time parameterizer is conservative segment timing, not a full time-optimal or jerk-limited algorithm. Validate model limits and behavior before real-world use.
 
-```text
-excavator_motion_planning/
-├── src/
-│   ├── excavator_common/       # Generic joint path/trajectory data types and interfaces
-│   └── excavator_sim_viz/      # Kinematic trajectory playback and JointState publishing
-└── README.md
-```
-
-## Dependencies
+## Requirements and build
 
 - Ubuntu 22.04
 - ROS 2 Humble
-- `rclcpp`
-- `sensor_msgs`
-- `trajectory_msgs`
-- `xacro`, `robot_state_publisher`, and `rviz2` for model visualization
+- C++17, Eigen, URDF, colcon
 
-Install the runtime dependencies:
+Install dependencies and build:
 
 ```bash
 sudo apt update
-sudo apt install ros-humble-rclcpp ros-humble-sensor-msgs \
-  ros-humble-trajectory-msgs ros-humble-xacro \
-  ros-humble-robot-state-publisher ros-humble-rviz2
-```
-
-## Build
-
-```bash
+sudo apt install ros-humble-desktop ros-humble-urdf ros-humble-xacro \
+  ros-humble-robot-state-publisher ros-humble-rviz2 ros-humble-eigen
 source /opt/ros/humble/setup.bash
+mkdir -p ~/excavator_ws/src
+cd ~/excavator_ws/src
+git clone https://github.com/Polaris-zhj/excavator_motion_planning.git
 cd ~/excavator_ws
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-## Run trajectory playback
+## Visualize and play a trajectory
 
-Start the node:
+Start the model, RViz, and trajectory player:
 
 ```bash
-ros2 launch excavator_sim_viz trajectory_player.launch.py
+ros2 launch excavator_sim_viz model_view.launch.py
 ```
 
-In another terminal, source the workspace and publish a small test trajectory. Joint order must match `joint_names`:
+In a second terminal, publish a sample trajectory. Joint order must match `joint_names`:
 
 ```bash
 ros2 topic pub --once /joint_trajectory trajectory_msgs/msg/JointTrajectory \
 "{joint_names: [swing_joint, boom_joint, stick_joint, bucket_joint], points: [
-  {positions: [0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 0, nanosec: 0}},
+  {positions: [0.0, -0.35, 0.45, -0.4], time_from_start: {sec: 0, nanosec: 0}},
   {positions: [0.4, -0.2, 0.3, -0.4], time_from_start: {sec: 3, nanosec: 0}},
-  {positions: [0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 6, nanosec: 0}}
+  {positions: [0.0, -0.35, 0.45, -0.4], time_from_start: {sec: 6, nanosec: 0}}
 ]}"
 ```
 
-The player linearly interpolates between trajectory points and publishes `/joint_states` at 50 Hz by default. When a new trajectory arrives, it replaces the active trajectory. This is kinematic playback, not a dynamics simulation or a planner.
+The playback node linearly interpolates trajectory positions and publishes `/joint_states` at 50 Hz. A new trajectory replaces the active trajectory. `robot_state_publisher` derives TF from the single JointState stream.
 
-## Data and planner interfaces
+To validate the Xacro separately:
 
-- `excavator_common/joint_trajectory.hpp`: `JointPath`, `JointTrajectory`, validation helpers. Internal trajectory time is named `t`.
-- `excavator_common/planner_interfaces.hpp`: replaceable `PathPlanner`, `TimeParameterizer`, and `TrajectoryInterpolator` abstract interfaces.
-- ROS bridge: `trajectory_msgs/msg/JointTrajectory` input and `sensor_msgs/msg/JointState` output.
+```bash
+xacro src/excavator_description/urdf/excavator.urdf.xacro > /tmp/excavator.urdf
+```
 
-## Current implementation status
+## Kinematics API
 
-- [x] Initial repository and ROS package skeleton
-- [x] Generic joint path and trajectory data structures and validation
-- [x] Replaceable planner/time-parameterization/interpolation interfaces
-- [x] Joint-space trajectory playback node publishing `/joint_states`
-- [x] Inspected source model: primary joint names and `bucket_tip` frame identified
-- [ ] Add model visualization launch that resolves the description package and starts RViz
-- [ ] Add stateless FK/Jacobian/IK interfaces and a baseline implementation
-- [ ] Add unit tests and CI build verification
-- [ ] Validate joint limits and model motion in a live ROS 2 environment
+After converting Xacro to URDF (or using a generated URDF file), the API can load it without holding a mutable current joint state:
 
-The source repository contains the URDF/Xacro and STL mesh files, but this repository does not duplicate those assets. Keep the original model repository's license and attribution when redistributing model resources.
+```cpp
+#include "kinematics/urdf_kinematics_model.hpp"
+
+tramcar::planning::UrdfKinematicsModel kinematics;
+const auto load = kinematics.InitializeFromFile("/tmp/excavator.urdf");
+if (!load.ok) {
+  // Handle load.message.
+}
+
+tramcar::planning::Pose3 pose;
+const auto fk = kinematics.GetLinkPose(
+    {0.0, -0.35, 0.45, -0.4}, "bucket_tip", &pose);
+```
+
+The default joint ordering is swing, boom, stick, bucket. Use the actual model limits and verify the coordinate frames before using results for planning or control.
+
+## Tests and current limitations
+
+Run unit tests with:
+
+```bash
+colcon test --event-handlers console_direct+
+colcon test-result --verbose
+```
+
+CI builds the ROS 2 workspace, runs unit tests, and validates Xacro. Remaining validation includes running the workspace on Ubuntu 22.04 + ROS 2 Humble, checking the rendered model/TF in RViz, replacing the base-link fallback with the exact upstream CAD mesh, and extending path/time validation with collision checking, interpolation deviation checks, and full acceleration/jerk constraints.
