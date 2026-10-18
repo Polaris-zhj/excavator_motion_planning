@@ -1,0 +1,9 @@
+trajectory_msgs/JointTrajectory trajectory
+bool require_confirmation
+---
+bool success
+string message
+---
+uint8 state
+float32 progress
+string message
