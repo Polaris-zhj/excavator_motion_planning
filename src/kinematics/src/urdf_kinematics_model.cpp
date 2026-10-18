@@ -171,6 +171,7 @@ ValidationResult UrdfKinematicsModel::InitializeFromString(
   }
 
   impl_->limits.clear();
+  impl_->velocity_limits.clear();
   for (const std::string& joint_name : joint_names_) {
     const auto joint = impl_->model.getJoint(joint_name);
     if (!joint) {
@@ -189,6 +190,9 @@ ValidationResult UrdfKinematicsModel::InitializeFromString(
       upper = joint->limits->upper;
     }
     impl_->limits[joint_name] = {lower, upper};
+    impl_->velocity_limits[joint_name] =
+        joint->limits ? joint->limits->velocity
+                      : std::numeric_limits<double>::infinity();
   }
   impl_->initialized = true;
   return {true, ""};
