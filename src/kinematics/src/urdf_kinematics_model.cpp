@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include <Eigen/Cholesky>
 #include <Eigen/Geometry>
 #include <urdf/model.h>
 
@@ -103,7 +104,7 @@ struct UrdfKinematicsModel::Impl {
           link->parent_joint->parent_to_joint_origin_transform);
       motion.axis = ToEigen(link->parent_joint->axis);
       reversed.push_back(std::move(motion));
-      link = link->getParent();
+      link = link->parent_link;
     }
     chain->assign(reversed.rbegin(), reversed.rend());
     return {true, ""};
@@ -320,16 +321,13 @@ InverseKinematicsResult UrdfKinematicsModel::SolveIK(
                                     current_pose.orientation.x,
                                     current_pose.orientation.y,
                                     current_pose.orientation.z);
-    Vector3d orientation_error =
-        (target_orientation * current_orientation.conjugate()).normalized()
-            .vec();
     Quaterniond delta_orientation =
         (target_orientation * current_orientation.conjugate()).normalized();
     if (delta_orientation.w() < 0.0) {
       delta_orientation.coeffs() *= -1.0;
     }
     const Eigen::AngleAxisd angle_axis(delta_orientation);
-    orientation_error = angle_axis.axis() * angle_axis.angle();
+    const Vector3d orientation_error = angle_axis.axis() * angle_axis.angle();
 
     const Vector3d position_error = target_position - current_position;
     if (position_error.norm() <= options.position_tolerance &&
