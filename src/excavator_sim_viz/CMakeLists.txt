@@ -9,6 +9,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
@@ -23,7 +25,7 @@ target_link_libraries(excavator_simulator PUBLIC excavator_common excavator_plan
 target_compile_options(excavator_simulator PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(trajectory_player src/trajectory_player.cpp)
-ament_target_dependencies(trajectory_player rclcpp sensor_msgs trajectory_msgs excavator_interfaces)
+ament_target_dependencies(trajectory_player rclcpp rclcpp_action std_msgs sensor_msgs trajectory_msgs excavator_interfaces)
 target_link_libraries(trajectory_player excavator_simulator)
 target_compile_options(trajectory_player PRIVATE -Wall -Wextra -Wpedantic)
 
