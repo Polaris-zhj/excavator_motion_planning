@@ -13,6 +13,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
 find_package(excavator_planning REQUIRED)
+find_package(excavator_interfaces REQUIRED)
 
 add_library(excavator_simulator src/kinematic_simulator.cpp)
 target_include_directories(excavator_simulator PUBLIC
@@ -22,7 +23,7 @@ target_link_libraries(excavator_simulator PUBLIC excavator_common excavator_plan
 target_compile_options(excavator_simulator PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(trajectory_player src/trajectory_player.cpp)
-ament_target_dependencies(trajectory_player rclcpp sensor_msgs trajectory_msgs)
+ament_target_dependencies(trajectory_player rclcpp sensor_msgs trajectory_msgs excavator_interfaces)
 target_link_libraries(trajectory_player excavator_simulator)
 target_compile_options(trajectory_player PRIVATE -Wall -Wextra -Wpedantic)
 
