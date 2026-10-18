@@ -2,7 +2,7 @@ sensor_msgs/JointState start_state
 sensor_msgs/JointState goal_state
 string target_link
 builtin_interfaces/Duration allowed_planning_time
-excavator_interfaces/PlanningScene planning_scene
+PlanningScene planning_scene
 ---
 bool success
 trajectory_msgs/JointTrajectory trajectory
