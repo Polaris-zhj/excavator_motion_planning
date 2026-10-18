@@ -56,6 +56,27 @@ TEST(JointTrajectoryValidationTest, RejectsNonIncreasingTimes) {
   EXPECT_FALSE(ValidateJointTrajectory(trajectory).ok);
 }
 
+TEST(JointTrajectoryLimitsTest, RejectsVelocityLimitViolation) {
+  JointTrajectory trajectory;
+  trajectory.joint_names = {"joint_a"};
+  trajectory.points = {{0.0, {0.0}, {}, {}}, {1.0, {2.0}, {}, {}}};
+
+  const ValidationResult result =
+      ValidateJointTrajectoryLimits(trajectory, {1.0}, {2.0});
+  EXPECT_FALSE(result.ok);
+  EXPECT_NE(result.message.find("velocity"), std::string::npos);
+}
+
+TEST(JointTrajectoryLimitsTest, AcceptsTrajectoryWithinDiscreteLimits) {
+  JointTrajectory trajectory;
+  trajectory.joint_names = {"joint_a"};
+  trajectory.points = {{0.0, {0.0}, {}, {}},
+                       {1.0, {0.5}, {}, {}},
+                       {2.0, {1.0}, {}, {}}};
+
+  EXPECT_TRUE(ValidateJointTrajectoryLimits(trajectory, {1.0}, {1.0}).ok);
+}
+
 TEST(JointTrajectoryValidationTest, RejectsNonFinitePosition) {
   JointTrajectory trajectory;
   trajectory.joint_names = {"joint_a"};
