@@ -12,13 +12,25 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
+find_package(excavator_planning REQUIRED)
+
+add_library(excavator_simulator src/kinematic_simulator.cpp)
+target_include_directories(excavator_simulator PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_link_libraries(excavator_simulator PUBLIC excavator_common excavator_planning)
+target_compile_options(excavator_simulator PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(trajectory_player src/trajectory_player.cpp)
 ament_target_dependencies(trajectory_player rclcpp sensor_msgs trajectory_msgs)
-target_link_libraries(trajectory_player excavator_common)
+target_link_libraries(trajectory_player excavator_simulator)
 target_compile_options(trajectory_player PRIVATE -Wall -Wextra -Wpedantic)
 
-install(TARGETS trajectory_player DESTINATION lib/${PROJECT_NAME})
+install(TARGETS excavator_simulator trajectory_player
+  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
+ament_export_include_directories(include)
+ament_export_dependencies(excavator_common excavator_planning)
 ament_package()
