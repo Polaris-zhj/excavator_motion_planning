@@ -67,6 +67,10 @@ inline ValidationResult ValidateJointTrajectory(
     return {false, "trajectory must contain at least one point"};
   }
 
+  if (trajectory.points.front().t != 0.0) {
+    return {false, "first trajectory point time t must be zero"};
+  }
+
   double previous_t = -1.0;
   for (std::size_t point_index = 0; point_index < trajectory.points.size();
        ++point_index) {
