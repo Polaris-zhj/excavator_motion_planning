@@ -26,13 +26,17 @@ LinearPathPlanner::LinearPathPlanner(
 
 PlanningResponse LinearPathPlanner::Plan(const PlanningRequest& request) {
   PlanningResponse response;
-  if (joint_names_.empty() || joint_limits_.size() != joint_names_.size() ||
+  const ValidationResult names_validation = ValidateJointNames(joint_names_);
+  if (!names_validation.ok ||
+      joint_limits_.size() != joint_names_.size() ||
       request.start.size() != joint_names_.size() ||
       request.goal.size() != joint_names_.size() ||
       !IsFiniteVector(request.start) || !IsFiniteVector(request.goal) ||
       !std::isfinite(max_joint_step_) || max_joint_step_ <= 0.0 ||
       !std::isfinite(request.timeout_seconds) || request.timeout_seconds <= 0.0) {
-    response.message = "invalid planning request or planner configuration";
+    response.message = names_validation.ok
+                           ? "invalid planning request or planner configuration"
+                           : names_validation.message;
     return response;
   }
 
