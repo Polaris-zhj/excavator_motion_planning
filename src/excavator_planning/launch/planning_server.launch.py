@@ -22,6 +22,7 @@ def generate_launch_description():
                     "swing_joint", "boom_joint", "stick_joint", "bucket_joint"
                 ],
                 "max_joint_step": 0.05,
+                "max_collision_joint_step": 0.03,
                 "max_acceleration": [1.0, 0.6, 0.8, 1.0],
             }],
         )
