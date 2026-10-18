@@ -25,6 +25,12 @@ target_link_libraries(excavator_simulator PUBLIC excavator_common excavator_plan
 target_compile_options(excavator_simulator PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(trajectory_player src/trajectory_player.cpp)
+
+add_executable(trajectory_executor src/trajectory_executor.cpp)
+ament_target_dependencies(trajectory_executor rclcpp rclcpp_action std_msgs
+  trajectory_msgs excavator_interfaces)
+target_link_libraries(trajectory_executor excavator_common)
+target_compile_options(trajectory_executor PRIVATE -Wall -Wextra -Wpedantic)
 ament_target_dependencies(trajectory_player rclcpp rclcpp_action std_msgs sensor_msgs trajectory_msgs excavator_interfaces)
 target_link_libraries(trajectory_player excavator_simulator)
 target_compile_options(trajectory_player PRIVATE -Wall -Wextra -Wpedantic)
@@ -37,7 +43,7 @@ endif()
 
 install(TARGETS excavator_simulator EXPORT excavator_sim_vizTargets
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
-install(TARGETS trajectory_player DESTINATION lib/${PROJECT_NAME})
+install(TARGETS trajectory_player trajectory_executor DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
