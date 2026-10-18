@@ -25,6 +25,7 @@ class UrdfKinematicsModel final : public KinematicsModel {
   ValidationResult InitializeFromFile(const std::string& urdf_path);
   ValidationResult InitializeFromString(const std::string& urdf_xml);
   std::vector<std::pair<double, double>> GetPositionLimits() const;
+  std::vector<double> GetVelocityLimits() const;
   const std::vector<std::string>& joint_names() const;
 
   ValidationResult GetLinkPose(const JointPositions& joint_positions,
