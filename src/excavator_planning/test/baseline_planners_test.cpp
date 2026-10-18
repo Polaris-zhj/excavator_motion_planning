@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+
 namespace tramcar {
 namespace planning {
 namespace {
@@ -19,6 +21,18 @@ TEST(LinearPathPlannerTest, GeneratesEndpointsAndIntermediateSamples) {
   EXPECT_DOUBLE_EQ(response.path.points.front()[0], 0.0);
   EXPECT_DOUBLE_EQ(response.path.points.back()[0], 0.5);
   EXPECT_DOUBLE_EQ(response.path.points.back()[1], -0.5);
+}
+
+TEST(LinearPathPlannerTest, RejectsDuplicateConfiguredJointNames) {
+  LinearPathPlanner planner({"joint_a", "joint_a"},
+                            {{-1.0, 1.0}, {-1.0, 1.0}});
+  PlanningRequest request;
+  request.start = {0.0, 0.0};
+  request.goal = {0.5, -0.5};
+
+  const PlanningResponse response = planner.Plan(request);
+  EXPECT_FALSE(response.success);
+  EXPECT_NE(response.message.find("duplicates"), std::string::npos);
 }
 
 TEST(LinearPathPlannerTest, RejectsGoalOutsideJointLimit) {
