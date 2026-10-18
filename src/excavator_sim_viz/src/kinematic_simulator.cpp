@@ -51,6 +51,18 @@ planning::ValidationResult KinematicSimulator::SubmitTrajectory(
   return {true, ""};
 }
 
+void KinematicSimulator::CancelTrajectory() {
+  if (has_trajectory_) {
+    planning::JointTrajectoryPoint current_sample;
+    if (interpolator_.Sample(trajectory_, elapsed_time_, &current_sample).ok) {
+      initial_positions_ = std::move(current_sample.positions);
+    }
+  }
+  has_trajectory_ = false;
+  trajectory_finished_ = false;
+  elapsed_time_ = 0.0;
+}
+
 planning::ValidationResult KinematicSimulator::Step(
     double dt, SimulationState* state) {
   if (state == nullptr) {
