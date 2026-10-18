@@ -107,13 +107,23 @@ TEST(UrdfFclCollisionCheckerTest, LoadsUrdfStlCollisionMesh) {
       R"(<robot name="mesh_test"><link name="base_link"><collision>)"
       R"(<origin xyz="0 0 0" rpy="0 0 0"/><geometry><mesh filename=")"
       TEST_MESH_PATH
-      R"(" scale="1 1 1"/></geometry></collision></link></robot>)";
+      R"(" scale="1 1 1"/></geometry></collision></link>)"
+      R"(<link name="arm_link"/><joint name="arm_joint" type="revolute">)"
+      R"(<parent link="base_link"/><child link="arm_link"/>)"
+      R"(<origin xyz="0 0 0" rpy="0 0 0"/><axis xyz="0 0 1"/>)"
+      R"(<limit lower="-1" upper="1" effort="1" velocity="1"/>)"
+      R"(</joint></robot>)";
 
   UrdfFclCollisionChecker checker;
-  const auto initialized = checker.Initialize(urdf, {"unused_joint"});
-  // The mesh is loaded before joint validation, but a valid planning group is
-  // still required; use a fixed fixture joint so this also tests model setup.
-  EXPECT_FALSE(initialized.ok);
+  const auto initialized = checker.Initialize(urdf, {"arm_joint"});
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  scene.objects.push_back(MakeSphere("mesh_surface", 0.2, 0.2, 0.0, 0.1));
+  const CollisionCheckResult result = checker.CheckState({0.0}, scene);
+  ASSERT_TRUE(result.valid) << result.message;
+  EXPECT_TRUE(result.collision);
 }
 
 TEST(UrdfFclCollisionCheckerTest, RejectsDuplicateJointNames) {
