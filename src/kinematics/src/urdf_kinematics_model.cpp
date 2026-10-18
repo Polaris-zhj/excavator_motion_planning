@@ -81,6 +81,7 @@ struct UrdfKinematicsModel::Impl {
   urdf::Model model;
   bool initialized{false};
   std::unordered_map<std::string, std::pair<double, double>> limits;
+  std::unordered_map<std::string, double> velocity_limits;
 
   ValidationResult BuildChain(const std::string& link_name,
                               std::vector<JointMotion>* chain) const {
@@ -130,6 +131,7 @@ ValidationResult UrdfKinematicsModel::InitializeFromFile(
   }
 
   impl_->limits.clear();
+  impl_->velocity_limits.clear();
   for (const std::string& joint_name : joint_names_) {
     const auto joint = impl_->model.getJoint(joint_name);
     if (!joint) {
@@ -148,6 +150,9 @@ ValidationResult UrdfKinematicsModel::InitializeFromFile(
       upper = joint->limits->upper;
     }
     impl_->limits[joint_name] = {lower, upper};
+    impl_->velocity_limits[joint_name] =
+        joint->limits ? joint->limits->velocity
+                      : std::numeric_limits<double>::infinity();
   }
   impl_->initialized = true;
   return {true, ""};
@@ -196,6 +201,19 @@ UrdfKinematicsModel::GetPositionLimits() const {
   for (const std::string& joint_name : joint_names_) {
     const auto iter = impl_->limits.find(joint_name);
     if (iter == impl_->limits.end()) {
+      return {};
+    }
+    limits.push_back(iter->second);
+  }
+  return limits;
+}
+
+std::vector<double> UrdfKinematicsModel::GetVelocityLimits() const {
+  std::vector<double> limits;
+  limits.reserve(joint_names_.size());
+  for (const std::string& joint_name : joint_names_) {
+    const auto iter = impl_->velocity_limits.find(joint_name);
+    if (iter == impl_->velocity_limits.end()) {
       return {};
     }
     limits.push_back(iter->second);
