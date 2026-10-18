@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cmath>
 #include <memory>
 #include <mutex>
