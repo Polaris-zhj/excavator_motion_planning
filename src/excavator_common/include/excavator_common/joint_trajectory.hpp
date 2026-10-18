@@ -77,6 +77,9 @@ inline ValidationResult ValidateJointPath(const JointPath& path) {
   return {true, ""};
 }
 
+inline ValidationResult ValidateJointTrajectory(
+    const JointTrajectory& trajectory);
+
 // Checks finite-difference motion limits on the piecewise-linear position
 // trajectory. This does not guarantee continuous acceleration or jerk limits.
 inline ValidationResult ValidateJointTrajectoryLimits(
