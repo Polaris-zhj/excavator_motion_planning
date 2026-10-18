@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>excavator_collision</name>
+  <version>0.1.0</version>
+  <description>FCL-based URDF robot and environment collision checking.</description>
+  <maintainer email="maintainer@example.com">Excavator Motion Planning Contributors</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>ament_index_cpp</depend>
+  <depend>eigen</depend>
+  <depend>libfcl-dev</depend>
+  <depend>urdf</depend>
+  <depend>excavator_common</depend>
+  <depend>excavator_interfaces</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
