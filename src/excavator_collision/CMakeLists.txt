@@ -12,6 +12,8 @@ find_package(ament_index_cpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(fcl REQUIRED)
 find_package(urdf REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(shape_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
 find_package(excavator_interfaces REQUIRED)
 
@@ -22,7 +24,7 @@ target_include_directories(excavator_collision PUBLIC
 )
 target_link_libraries(excavator_collision fcl Eigen3::Eigen)
 ament_target_dependencies(excavator_collision
-  ament_index_cpp urdf excavator_common excavator_interfaces
+  ament_index_cpp urdf geometry_msgs shape_msgs excavator_common excavator_interfaces
 )
 target_compile_options(excavator_collision PRIVATE -Wall -Wextra -Wpedantic)
 
@@ -41,6 +43,6 @@ install(TARGETS excavator_collision EXPORT excavator_collisionTargets
 install(DIRECTORY include/ DESTINATION include)
 ament_export_targets(excavator_collisionTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
-ament_export_dependencies(ament_index_cpp Eigen3 fcl urdf excavator_common
+ament_export_dependencies(ament_index_cpp Eigen3 fcl urdf geometry_msgs shape_msgs excavator_common
   excavator_interfaces)
 ament_package()
