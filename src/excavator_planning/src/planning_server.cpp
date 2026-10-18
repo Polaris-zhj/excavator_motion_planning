@@ -16,12 +16,11 @@
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 
 namespace excavator_planning {
+using namespace tramcar::planning;
 namespace {
 
 using PlanAction = excavator_interfaces::action::PlanTrajectory;
 using GoalHandlePlan = rclcpp_action::ServerGoalHandle<PlanAction>;
-using namespace tramcar::planning;
-
 double ToSeconds(const builtin_interfaces::msg::Duration& duration) {
   return static_cast<double>(duration.sec) +
          static_cast<double>(duration.nanosec) * 1.0e-9;
