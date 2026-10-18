@@ -200,7 +200,8 @@ TimeParameterizationResponse SimpleTimeParameterizer::Parameterize(
   }
 
   const ValidationResult trajectory_validation =
-      ValidateJointTrajectory(trajectory);
+      ValidateJointTrajectoryLimits(trajectory, request.max_velocity,
+                                    request.max_acceleration);
   if (!trajectory_validation.ok) {
     response.message = trajectory_validation.message;
     return response;
