@@ -25,6 +25,25 @@ planning::ValidationResult KinematicSimulator::SubmitTrajectory(
   if (trajectory.points.front().t != 0.0) {
     return {false, "trajectory must start at t = 0"};
   }
+
+  planning::JointPositions current_positions = initial_positions_;
+  if (has_trajectory_) {
+    planning::JointTrajectoryPoint current_sample;
+    const auto sample_result =
+        interpolator_.Sample(trajectory_, elapsed_time_, &current_sample);
+    if (!sample_result.ok) {
+      return sample_result;
+    }
+    current_positions = std::move(current_sample.positions);
+  }
+  constexpr double kMaxStartPositionError = 0.05;
+  for (std::size_t joint = 0; joint < joint_names_.size(); ++joint) {
+    if (std::abs(trajectory.points.front().positions[joint] -
+                 current_positions[joint]) > kMaxStartPositionError) {
+      return {false, "trajectory start is discontinuous from current state"};
+    }
+  }
+
   trajectory_ = trajectory;
   elapsed_time_ = 0.0;
   has_trajectory_ = true;
