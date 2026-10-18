@@ -1,7 +1,7 @@
 #ifndef EXCAVATOR_COMMON__ROBOT_MODEL_CONFIG_HPP_
 #define EXCAVATOR_COMMON__ROBOT_MODEL_CONFIG_HPP_
 
-#include <algorithm>
+#include <cstddef>
 #include <string>
 #include <unordered_set>
 #include <vector>
