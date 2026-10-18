@@ -53,6 +53,14 @@ bool IsFinite(const Transform& transform) {
   return transform.matrix().allFinite();
 }
 
+bool IsFinitePose(const geometry_msgs::msg::Pose& pose) {
+  const Quaternion quaternion(pose.orientation.w, pose.orientation.x,
+                              pose.orientation.y, pose.orientation.z);
+  return std::isfinite(pose.position.x) && std::isfinite(pose.position.y) &&
+         std::isfinite(pose.position.z) && quaternion.coeffs().allFinite() &&
+         quaternion.norm() > 1.0e-12;
+}
+
 std::string ResolveMeshPath(const std::string& uri) {
   const std::string prefix = "package://";
   if (uri.compare(0, prefix.size(), prefix) != 0) {
@@ -329,6 +337,13 @@ struct UrdfFclCollisionChecker::Impl {
           objects,
       std::string* error) const {
     objects->clear();
+    const auto root = model.getRoot();
+    if (!scene.header.frame_id.empty() &&
+        (!root || scene.header.frame_id != root->name)) {
+      *error = "planning scene frame_id must be empty or the URDF root frame (" +
+               (root ? root->name : std::string("unknown")) + ")";
+      return false;
+    }
     std::unordered_set<std::string> ids;
     for (const auto& object : scene.objects) {
       if (object.id.empty() || !ids.insert(object.id).second) {
@@ -381,11 +396,11 @@ struct UrdfFclCollisionChecker::Impl {
                    object.id;
           return false;
       }
-      const Transform pose = ToTransform(object.pose);
-      if (!IsFinite(pose)) {
-        *error = "non-finite environment object pose: " + object.id;
+      if (!IsFinitePose(object.pose)) {
+        *error = "invalid environment object pose: " + object.id;
         return false;
       }
+      const Transform pose = ToTransform(object.pose);
       objects->push_back({object.id, {pose, std::move(geometry)}});
     }
     return true;
@@ -525,7 +540,7 @@ ValidationResult UrdfFclCollisionChecker::Initialize(
     Impl::LinkGeometry item;
     item.name = link->name;
     item.link = link;
-    item.parent_link = link->getParent() ? link->getParent()->name : "";
+    item.parent_link = link->parent_joint ? link->parent_joint->parent_link_name : "";
     std::vector<urdf::CollisionSharedPtr> collisions = link->collision_array;
     if (collisions.empty() && link->collision) {
       collisions.push_back(link->collision);
