@@ -105,7 +105,7 @@ struct UrdfKinematicsModel::Impl {
           link->parent_joint->parent_to_joint_origin_transform);
       motion.axis = ToEigen(link->parent_joint->axis);
       reversed.push_back(std::move(motion));
-      link = link->parent_link;
+      link = model.getLink(link->parent_joint->parent_link_name);
     }
     chain->assign(reversed.rbegin(), reversed.rend());
     return {true, ""};
