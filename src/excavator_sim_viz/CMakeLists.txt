@@ -33,11 +33,13 @@ if(BUILD_TESTING)
   target_link_libraries(kinematic_simulator_test excavator_simulator)
 endif()
 
-install(TARGETS excavator_simulator trajectory_player
-  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})
+install(TARGETS excavator_simulator EXPORT excavator_sim_vizTargets
+  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+install(TARGETS trajectory_player DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
+ament_export_targets(excavator_sim_vizTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
 ament_export_dependencies(excavator_common excavator_planning)
 ament_package()
