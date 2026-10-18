@@ -36,6 +36,7 @@ class KinematicSimulator final : public SimulatorInterface {
       const tramcar::planning::JointTrajectory& trajectory) override;
   tramcar::planning::ValidationResult Step(
       double dt, SimulationState* state) override;
+  void CancelTrajectory();
 
  private:
   std::vector<std::string> joint_names_;
