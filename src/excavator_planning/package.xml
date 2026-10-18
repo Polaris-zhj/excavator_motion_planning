@@ -14,6 +14,7 @@
   <depend>trajectory_msgs</depend>
   <depend>excavator_interfaces</depend>
   <depend>kinematics</depend>
+  <depend>excavator_collision</depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>excavator_description</exec_depend>
   <test_depend>ament_cmake_gtest</test_depend>
