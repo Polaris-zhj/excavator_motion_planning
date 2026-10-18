@@ -98,7 +98,7 @@ class TrajectoryPlayer final : public rclcpp::Node {
  private:
   void PublishStatus(std::uint8_t state, const std::string& message,
                      double elapsed_time) {
-    if (last_status_state_ == state) {
+    if (last_status_state_ == state && state != ExecutionStatusMessage::RUNNING) {
       return;
     }
     last_status_state_ = state;
@@ -152,7 +152,10 @@ class TrajectoryPlayer final : public rclcpp::Node {
       }
     }
 
-    if (simulation_state.trajectory_finished) {
+    if (simulation_state.trajectory_active) {
+      PublishStatus(ExecutionStatusMessage::RUNNING, "trajectory executing",
+                    simulation_state.elapsed_time);
+    } else if (simulation_state.trajectory_finished) {
       PublishStatus(ExecutionStatusMessage::SUCCEEDED, "trajectory completed",
                     simulation_state.elapsed_time);
     }
