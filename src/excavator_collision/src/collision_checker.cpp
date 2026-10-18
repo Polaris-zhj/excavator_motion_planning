@@ -60,7 +60,7 @@ bool IsFinitePose(const geometry_msgs::msg::Pose& pose) {
                               pose.orientation.y, pose.orientation.z);
   return std::isfinite(pose.position.x) && std::isfinite(pose.position.y) &&
          std::isfinite(pose.position.z) && quaternion.coeffs().allFinite() &&
-         quaternion.norm() > 1.0e-12;
+         std::isfinite(quaternion.norm()) && quaternion.norm() > 1.0e-12;
 }
 
 std::string ResolveMeshPath(const std::string& uri) {
@@ -227,6 +227,13 @@ GeometryPtr LoadGeometry(const urdf::GeometrySharedPtr& geometry,
       std::vector<fcl::Triangle> triangles;
       if (!LoadStl(path, scale, &vertices, &triangles, error)) {
         return {};
+      }
+      for (const auto& vertex : vertices) {
+        if (!vertex.allFinite()) {
+          *error = "collision mesh contains non-finite vertex coordinates: " +
+                   path;
+          return {};
+        }
       }
       auto model = std::make_shared<fcl::BVHModel<fcl::OBBRSSd>>();
       if (model->beginModel() != fcl::BVH_OK ||
@@ -573,8 +580,11 @@ ValidationResult UrdfFclCollisionChecker::Initialize(
         return {false, "failed to load collision geometry for link " +
                            link->name + ": " + error};
       }
-      item.geometries.push_back({ToTransform(collision->origin),
-                                 std::move(geometry)});
+      const Transform local_transform = ToTransform(collision->origin);
+      if (!IsFinite(local_transform)) {
+        return {false, "non-finite collision origin for link: " + link->name};
+      }
+      item.geometries.push_back({local_transform, std::move(geometry)});
     }
     if (!item.geometries.empty()) {
       impl_->links.push_back(std::move(item));
