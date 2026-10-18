@@ -77,6 +77,67 @@ inline ValidationResult ValidateJointPath(const JointPath& path) {
   return {true, ""};
 }
 
+// Checks finite-difference motion limits on the piecewise-linear position
+// trajectory. This does not guarantee continuous acceleration or jerk limits.
+inline ValidationResult ValidateJointTrajectoryLimits(
+    const JointTrajectory& trajectory, const JointPositions& max_velocity,
+    const JointPositions& max_acceleration, double tolerance = 1.0e-9) {
+  const ValidationResult trajectory_validation =
+      ValidateJointTrajectory(trajectory);
+  if (!trajectory_validation.ok) {
+    return trajectory_validation;
+  }
+  const std::size_t joint_count = trajectory.joint_names.size();
+  if (max_velocity.size() != joint_count ||
+      max_acceleration.size() != joint_count || !std::isfinite(tolerance) ||
+      tolerance < 0.0) {
+    return {false, "motion limits must match joint count and tolerance must be non-negative"};
+  }
+  for (std::size_t joint = 0; joint < joint_count; ++joint) {
+    if (!std::isfinite(max_velocity[joint]) || max_velocity[joint] <= 0.0 ||
+        !std::isfinite(max_acceleration[joint]) ||
+        max_acceleration[joint] <= 0.0) {
+      return {false, "motion limits must be finite and positive"};
+    }
+  }
+
+  const std::size_t point_count = trajectory.points.size();
+  for (std::size_t index = 1; index < point_count; ++index) {
+    const double dt =
+        trajectory.points[index].t - trajectory.points[index - 1].t;
+    for (std::size_t joint = 0; joint < joint_count; ++joint) {
+      const double velocity =
+          (trajectory.points[index].positions[joint] -
+           trajectory.points[index - 1].positions[joint]) / dt;
+      if (std::abs(velocity) > max_velocity[joint] + tolerance) {
+        return {false, "trajectory segment exceeds a joint velocity limit"};
+      }
+    }
+  }
+
+  for (std::size_t index = 1; index + 1 < point_count; ++index) {
+    const double previous_dt =
+        trajectory.points[index].t - trajectory.points[index - 1].t;
+    const double next_dt =
+        trajectory.points[index + 1].t - trajectory.points[index].t;
+    const double total_dt = previous_dt + next_dt;
+    for (std::size_t joint = 0; joint < joint_count; ++joint) {
+      const double previous_velocity =
+          (trajectory.points[index].positions[joint] -
+           trajectory.points[index - 1].positions[joint]) / previous_dt;
+      const double next_velocity =
+          (trajectory.points[index + 1].positions[joint] -
+           trajectory.points[index].positions[joint]) / next_dt;
+      const double acceleration =
+          2.0 * (next_velocity - previous_velocity) / total_dt;
+      if (std::abs(acceleration) > max_acceleration[joint] + tolerance) {
+        return {false, "trajectory waypoint exceeds a joint acceleration limit"};
+      }
+    }
+  }
+  return {true, ""};
+}
+
 inline ValidationResult ValidateJointTrajectory(
     const JointTrajectory& trajectory) {
   const ValidationResult names_validation =
