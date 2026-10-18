@@ -153,6 +153,56 @@ ValidationResult UrdfKinematicsModel::InitializeFromFile(
   return {true, ""};
 }
 
+ValidationResult UrdfKinematicsModel::InitializeFromString(
+    const std::string& urdf_xml) {
+  if (urdf_xml.empty()) {
+    return {false, "URDF XML string must not be empty"};
+  }
+  if (!impl_->model.initString(urdf_xml)) {
+    return {false, "failed to parse URDF XML string"};
+  }
+  if (joint_names_.empty()) {
+    return {false, "configured joint group must not be empty"};
+  }
+
+  impl_->limits.clear();
+  for (const std::string& joint_name : joint_names_) {
+    const auto joint = impl_->model.getJoint(joint_name);
+    if (!joint) {
+      return {false, "configured joint is missing from URDF: " + joint_name};
+    }
+    if (joint->type != urdf::Joint::REVOLUTE &&
+        joint->type != urdf::Joint::CONTINUOUS &&
+        joint->type != urdf::Joint::PRISMATIC) {
+      return {false, "configured planning joint is not movable: " +
+                         joint_name};
+    }
+    double lower = -std::numeric_limits<double>::infinity();
+    double upper = std::numeric_limits<double>::infinity();
+    if (joint->limits && joint->type != urdf::Joint::CONTINUOUS) {
+      lower = joint->limits->lower;
+      upper = joint->limits->upper;
+    }
+    impl_->limits[joint_name] = {lower, upper};
+  }
+  impl_->initialized = true;
+  return {true, ""};
+}
+
+std::vector<std::pair<double, double>>
+UrdfKinematicsModel::GetPositionLimits() const {
+  std::vector<std::pair<double, double>> limits;
+  limits.reserve(joint_names_.size());
+  for (const std::string& joint_name : joint_names_) {
+    const auto iter = impl_->limits.find(joint_name);
+    if (iter == impl_->limits.end()) {
+      return {};
+    }
+    limits.push_back(iter->second);
+  }
+  return limits;
+}
+
 const std::vector<std::string>& UrdfKinematicsModel::joint_names() const {
   return joint_names_;
 }
