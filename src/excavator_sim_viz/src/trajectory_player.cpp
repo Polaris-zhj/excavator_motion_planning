@@ -14,6 +14,7 @@
 #include "excavator_interfaces/msg/execution_status.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "std_msgs/msg/empty.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 
 namespace excavator_sim_viz {
@@ -71,6 +72,15 @@ class TrajectoryPlayer final : public rclcpp::Node {
         "/joint_trajectory", 10,
         [this](JointTrajectoryMessage::ConstSharedPtr message) {
           ReceiveTrajectory(std::move(message));
+        });
+    cancel_subscription_ = create_subscription<std_msgs::msg::Empty>(
+        "/cancel_trajectory", 10,
+        [this](std_msgs::msg::Empty::ConstSharedPtr) {
+          std::lock_guard<std::mutex> lock(mutex_);
+          simulator_.CancelTrajectory();
+          last_step_ = Clock::now();
+          PublishStatus(ExecutionStatusMessage::CANCELED,
+                        "trajectory canceled by request", 0.0);
         });
 
     const auto period = std::chrono::duration<double>(1.0 / publish_rate_hz);
@@ -169,6 +179,7 @@ class TrajectoryPlayer final : public rclcpp::Node {
   std::uint8_t last_status_state_{255};
   rclcpp::Subscription<JointTrajectoryMessage>::SharedPtr
       trajectory_subscription_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr cancel_subscription_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::mutex mutex_;
   KinematicSimulator simulator_;
