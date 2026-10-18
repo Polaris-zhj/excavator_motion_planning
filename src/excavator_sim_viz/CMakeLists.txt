@@ -26,6 +26,12 @@ ament_target_dependencies(trajectory_player rclcpp sensor_msgs trajectory_msgs)
 target_link_libraries(trajectory_player excavator_simulator)
 target_compile_options(trajectory_player PRIVATE -Wall -Wextra -Wpedantic)
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(kinematic_simulator_test test/kinematic_simulator_test.cpp)
+  target_link_libraries(kinematic_simulator_test excavator_simulator)
+endif()
+
 install(TARGETS excavator_simulator trajectory_player
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
