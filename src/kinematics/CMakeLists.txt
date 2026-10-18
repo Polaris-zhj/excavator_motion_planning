@@ -23,6 +23,14 @@ target_link_libraries(kinematics PUBLIC Eigen3::Eigen)
 ament_target_dependencies(kinematics urdf excavator_common)
 target_compile_options(kinematics PRIVATE -Wall -Wextra -Wpedantic)
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(urdf_kinematics_test test/urdf_kinematics_test.cpp)
+  target_compile_definitions(urdf_kinematics_test PRIVATE
+    TEST_URDF_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/planar_robot.urdf")
+  target_link_libraries(urdf_kinematics_test kinematics)
+endif()
+
 install(TARGETS kinematics EXPORT kinematicsTargets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
