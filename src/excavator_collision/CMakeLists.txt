@@ -29,6 +29,8 @@ target_compile_options(excavator_collision PRIVATE -Wall -Wextra -Wpedantic)
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(collision_checker_test test/collision_checker_test.cpp)
+  target_compile_definitions(collision_checker_test PRIVATE
+    TEST_MESH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/tetrahedron.stl")
   target_link_libraries(collision_checker_test excavator_collision)
 endif()
 
