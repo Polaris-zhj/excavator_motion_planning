@@ -178,8 +178,9 @@ GeometryPtr LoadGeometry(const urdf::GeometrySharedPtr& geometry,
   switch (geometry->type) {
     case urdf::Geometry::BOX: {
       const auto box = std::dynamic_pointer_cast<urdf::Box>(geometry);
-      if (!box || box->dim.x <= 0.0 || box->dim.y <= 0.0 ||
-          box->dim.z <= 0.0) {
+      if (!box || !std::isfinite(box->dim.x) ||
+          !std::isfinite(box->dim.y) || !std::isfinite(box->dim.z) ||
+          box->dim.x <= 0.0 || box->dim.y <= 0.0 || box->dim.z <= 0.0) {
         *error = "invalid URDF box collision dimensions";
         return {};
       }
@@ -187,7 +188,8 @@ GeometryPtr LoadGeometry(const urdf::GeometrySharedPtr& geometry,
     }
     case urdf::Geometry::SPHERE: {
       const auto sphere = std::dynamic_pointer_cast<urdf::Sphere>(geometry);
-      if (!sphere || sphere->radius <= 0.0) {
+      if (!sphere || !std::isfinite(sphere->radius) ||
+          sphere->radius <= 0.0) {
         *error = "invalid URDF sphere collision radius";
         return {};
       }
@@ -196,7 +198,9 @@ GeometryPtr LoadGeometry(const urdf::GeometrySharedPtr& geometry,
     case urdf::Geometry::CYLINDER: {
       const auto cylinder =
           std::dynamic_pointer_cast<urdf::Cylinder>(geometry);
-      if (!cylinder || cylinder->radius <= 0.0 || cylinder->length <= 0.0) {
+      if (!cylinder || !std::isfinite(cylinder->radius) ||
+          !std::isfinite(cylinder->length) || cylinder->radius <= 0.0 ||
+          cylinder->length <= 0.0) {
         *error = "invalid URDF cylinder collision dimensions";
         return {};
       }
@@ -214,10 +218,14 @@ GeometryPtr LoadGeometry(const urdf::GeometrySharedPtr& geometry,
         *error = "cannot resolve collision mesh URI: " + mesh->filename;
         return {};
       }
+      const Vector3 scale(mesh->scale.x, mesh->scale.y, mesh->scale.z);
+      if (!scale.allFinite() || (scale.array().abs() < 1.0e-12).any()) {
+        *error = "invalid URDF mesh scale: " + mesh->filename;
+        return {};
+      }
       std::vector<fcl::Vector3d> vertices;
       std::vector<fcl::Triangle> triangles;
-      if (!LoadStl(path, Vector3(mesh->scale.x, mesh->scale.y, mesh->scale.z),
-                   &vertices, &triangles, error)) {
+      if (!LoadStl(path, scale, &vertices, &triangles, error)) {
         return {};
       }
       auto model = std::make_shared<fcl::BVHModel<fcl::OBBRSSd>>();
@@ -360,6 +368,9 @@ struct UrdfFclCollisionChecker::Impl {
       switch (primitive.type) {
         case shape_msgs::msg::SolidPrimitive::BOX:
           if (primitive.dimensions.size() != 3 ||
+              !std::isfinite(primitive.dimensions[0]) ||
+              !std::isfinite(primitive.dimensions[1]) ||
+              !std::isfinite(primitive.dimensions[2]) ||
               primitive.dimensions[0] <= 0.0 ||
               primitive.dimensions[1] <= 0.0 ||
               primitive.dimensions[2] <= 0.0) {
@@ -373,6 +384,7 @@ struct UrdfFclCollisionChecker::Impl {
           break;
         case shape_msgs::msg::SolidPrimitive::SPHERE:
           if (primitive.dimensions.size() != 1 ||
+              !std::isfinite(primitive.dimensions[0]) ||
               primitive.dimensions[0] <= 0.0) {
             *error = "environment sphere requires one positive radius: " +
                      object.id;
@@ -383,6 +395,8 @@ struct UrdfFclCollisionChecker::Impl {
           break;
         case shape_msgs::msg::SolidPrimitive::CYLINDER:
           if (primitive.dimensions.size() != 2 ||
+              !std::isfinite(primitive.dimensions[0]) ||
+              !std::isfinite(primitive.dimensions[1]) ||
               primitive.dimensions[0] <= 0.0 ||
               primitive.dimensions[1] <= 0.0) {
             *error = "environment cylinder requires positive height and radius: " +
@@ -507,6 +521,8 @@ UrdfFclCollisionChecker::~UrdfFclCollisionChecker() = default;
 
 ValidationResult UrdfFclCollisionChecker::Initialize(
     const std::string& urdf_xml, std::vector<std::string> joint_names) {
+  impl_->initialized = false;
+  impl_->links.clear();
   if (urdf_xml.empty() || joint_names.empty()) {
     return {false, "URDF XML and planning joint names must not be empty"};
   }
@@ -666,6 +682,12 @@ CollisionCheckResult UrdfFclCollisionChecker::CheckTrajectory(
     const excavator_interfaces::msg::PlanningScene& scene,
     double max_joint_step) const {
   CollisionCheckResult result;
+  const ValidationResult trajectory_validation =
+      ValidateJointTrajectory(trajectory);
+  if (!trajectory_validation.ok) {
+    result.message = trajectory_validation.message;
+    return result;
+  }
   if (trajectory.points.empty() ||
       trajectory.joint_names != impl_->joint_names ||
       !std::isfinite(max_joint_step) || max_joint_step <= 0.0) {
