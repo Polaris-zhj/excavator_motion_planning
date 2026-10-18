@@ -18,9 +18,10 @@ The Xacro also defines the `bucket_tip` frame for end-effector queries. The orig
 ## Packages
 
 - `excavator_description`: URDF/Xacro and meshes.
-- `excavator_common`: `JointPath`, `JointTrajectory`, validation helpers, and replaceable planner interfaces.
+- `excavator_interfaces`: ROS 2 messages and `PlanTrajectory` / `ExecuteTrajectory` action definitions.
+- `excavator_common`: `JointPath`, `JointTrajectory`, robot state/configuration, joint-limit checks, validation helpers, and replaceable planner interfaces.
 - `kinematics`: stateless URDF-backed FK, geometric Jacobian, and damped-least-squares IK.
-- `excavator_planning`: baseline straight-line joint-space path planner, conservative segment time assignment, and trajectory sampler.
+- `excavator_planning`: baseline straight-line joint-space path planner, conservative segment time assignment, trajectory sampler, and `/plan_trajectory` action server.
 - `excavator_sim_viz`: trajectory playback via `/joint_trajectory` and `/joint_states`, plus RViz launch configuration.
 
 The straight-line planner is a baseline only: it does not perform collision avoidance. The time parameterizer is conservative segment timing, not a full time-optimal or jerk-limited algorithm. Validate model limits and behavior before real-world use.
@@ -47,7 +48,7 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-## Visualize and play a trajectory
+## Plan a joint-space trajectory\n\nStart the planning action server in one terminal:\n\n```bash\nros2 launch excavator_planning planning_server.launch.py\n```\n\nSend a baseline request from the model home pose to a nearby joint configuration (the response explicitly states that collision avoidance is not implemented):\n\n```bash\nros2 action send_goal /plan_trajectory excavator_interfaces/action/PlanTrajectory \\\n"{start_state: {name: [swing_joint, boom_joint, stick_joint, bucket_joint], position: [0.0, -0.35, 0.45, -0.4]}, goal_state: {name: [swing_joint, boom_joint, stick_joint, bucket_joint], position: [0.2, -0.3, 0.4, -0.3]}, target_link: bucket_tip, allowed_planning_time: {sec: 1, nanosec: 0}, planning_scene: {is_diff: false, objects: []}}"\n```\n\nThe action rejects requests with obstacle objects because no FCL collision backend is implemented yet. A successful baseline result is not a collision-safety guarantee. The generated trajectory can be sent to `/joint_trajectory` for playback.\n\n## Visualize and play a trajectory
 
 Start the model, RViz, and trajectory player:
 
@@ -74,7 +75,7 @@ To validate the Xacro separately:
 xacro src/excavator_description/urdf/excavator.urdf.xacro > /tmp/excavator.urdf
 ```
 
-## Kinematics API
+## Kinematics API\n\nThe `kinematics` package loads expanded URDF XML or a URDF file, computes stateless FK relative to `base_link` when that link exists, computes a geometric Jacobian, exposes an SVD singularity metric, and provides damped-least-squares IK. The `planning_server` uses the Xacro-expanded robot description and extracts joint position/velocity limits from the model.
 
 After converting Xacro to URDF (or using a generated URDF file), the API can load it without holding a mutable current joint state:
 
