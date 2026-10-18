@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <cstring>
 #include <fstream>
 #include <limits>
@@ -14,6 +15,7 @@
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <fcl/fcl.h>
+#include <geometry_msgs/msg/pose.hpp>
 #include <shape_msgs/msg/solid_primitive.hpp>
 #include <urdf/model.h>
 
