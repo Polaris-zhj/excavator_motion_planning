@@ -31,12 +31,12 @@ bash scripts/replace_base_link_mesh.sh ../ws_excavator
 | `excavator_interfaces` | ROS 2 消息，以及 `PlanTrajectory`、`ExecuteTrajectory` Action 定义 |
 | `excavator_common` | `JointPath`、`JointTrajectory`、机器人状态/配置、关节限位与轨迹校验、可替换规划接口 |
 | `kinematics` | 基于 URDF 的正运动学（FK）、几何雅可比、阻尼最小二乘逆运动学（IK）及奇异性指标 |
-| `excavator_planning` | 直线关节空间基线规划器、分段时间参数化、轨迹插值与 `/plan_trajectory` Action Server |
+| `excavator_collision` | 基于 FCL 的 URDF 碰撞几何加载、连杆位姿更新、自碰撞/环境碰撞与路径采样检测（支持 Box、Sphere、Cylinder 和 STL 网格） |\n| `excavator_planning` | 直线关节空间基线规划器、分段时间参数化、轨迹插值、碰撞校验与 `/plan_trajectory` Action Server |
 | `excavator_sim_viz` | 轨迹播放、`/joint_states` 发布、RViz 模型显示及轨迹执行 Action 桥接 |
 
 规划算法通过接口解耦，后续可替换为 RRT、RRT*、PRM 或自定义算法，而不必改变上层调用方式。
 
-**当前安全边界：**直线规划器只是可运行的基线，不执行环境或自碰撞检测；时间参数化会检查离散轨迹段速度和内部路点加速度估计，并按比例延长时间以满足给定阈值；这不是连续时间加速度/jerk 保证，也不是时间最优算法。规划成功不代表轨迹无碰撞或可用于真实设备。请在仿真环境充分验证后再考虑接入真实控制系统。
+**当前安全边界：**直线规划器只是可运行的基线。规划服务现在会使用 FCL 检查 URDF 中的碰撞几何，并对路径和时间参数化后的轨迹按 `max_collision_joint_step`（默认 0.03，关节单位为 rad 或 m）进行离散采样，检查环境碰撞和非相邻连杆自碰撞；场景物体支持 Box、Sphere、Cylinder，URDF 网格当前支持 STL。规划场景的物体位姿必须使用 URDF 根坐标系（本模型为 `world`），不支持自动 TF 变换。采样检查不能证明相邻采样点之间绝对无碰撞，也不是连续时间加速度/jerk 保证或时间最优算法。规划成功不代表可直接用于真实设备。
 
 ## 3. 环境要求与编译
 
@@ -49,7 +49,7 @@ bash scripts/replace_base_link_mesh.sh ../ws_excavator
 ```bash
 sudo apt update
 sudo apt install ros-humble-desktop ros-humble-urdf ros-humble-xacro \
-  ros-humble-robot-state-publisher ros-humble-rviz2 libeigen3-dev
+  ros-humble-robot-state-publisher ros-humble-rviz2 libeigen3-dev libfcl-dev
 
 source /opt/ros/humble/setup.bash
 mkdir -p ~/excavator_ws/src
@@ -109,7 +109,7 @@ ros2 action send_goal /plan_trajectory excavator_interfaces/action/PlanTrajector
 "{start_state: {name: [swing_joint, boom_joint, stick_joint, bucket_joint], position: [0.0, -0.35, 0.45, -0.4]}, goal_state: {name: [swing_joint, boom_joint, stick_joint, bucket_joint], position: [0.2, -0.3, 0.4, -0.3]}, target_link: bucket_tip, allowed_planning_time: {sec: 1, nanosec: 0}, planning_scene: {is_diff: false, objects: []}}"
 ```
 
-当前规划器只提供直线关节空间路径基线。请求包含障碍物时，服务会拒绝规划，因为 FCL 碰撞检测后端尚未接入。即使空场景请求成功，也**不提供碰撞安全保证**。
+当前规划器只提供直线关节空间路径基线。服务会先检查路径采样点，再检查时间参数化轨迹的采样点；任何环境碰撞、自碰撞或无效场景都会导致请求失败。规划场景中的障碍物以 `planning_scene.header.frame_id` 指定的坐标系表达，该字段必须为空或与 URDF 根坐标系一致（当前模型为 `world`）。
 
 规划结果可发布到 `/joint_trajectory` 播放，或交给 `/execute_trajectory` Action 执行。执行 Action 默认要求显式确认（参数 `require_confirmation: true`），并会检查轨迹起点与当前关节状态是否连续；任一关节起点偏差超过约 0.05 rad 时会拒绝执行。
 
