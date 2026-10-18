@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>excavator_sim_viz</name>
+  <version>0.1.0</version>
+  <description>Kinematic joint-trajectory playback node for an excavator model.</description>
+  <maintainer email="maintainer@example.com">Excavator Motion Planning Contributors</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>trajectory_msgs</depend>
+  <depend>excavator_common</depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
