@@ -3,6 +3,7 @@
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,10 @@ class TrajectoryPlayer final : public rclcpp::Node {
   TrajectoryPlayer() : Node("excavator_trajectory_player") {
     const auto publish_rate_hz =
         declare_parameter<double>("publish_rate_hz", 50.0);
+    passive_joint_names_ = declare_parameter<std::vector<std::string>>(
+        "passive_joint_names",
+        {"bucket_linkage_joint", "stick_rocker_l_joint",
+         "stick_rocker_r_joint"});
     if (!std::isfinite(publish_rate_hz) || publish_rate_hz <= 0.0) {
       throw std::invalid_argument("publish_rate_hz must be finite and positive");
     }
@@ -139,6 +144,14 @@ class TrajectoryPlayer final : public rclcpp::Node {
     state.name = trajectory.joint_names;
     state.position = std::move(positions);
     state.velocity = std::move(velocities);
+    for (const std::string& joint_name : passive_joint_names_) {
+      if (std::find(state.name.begin(), state.name.end(), joint_name) ==
+          state.name.end()) {
+        state.name.push_back(joint_name);
+        state.position.push_back(0.0);
+        state.velocity.push_back(0.0);
+      }
+    }
     joint_state_publisher_->publish(state);
   }
 
@@ -148,6 +161,7 @@ class TrajectoryPlayer final : public rclcpp::Node {
   rclcpp::TimerBase::SharedPtr timer_;
   std::mutex mutex_;
   JointTrajectory trajectory_;
+  std::vector<std::string> passive_joint_names_;
   Clock::time_point trajectory_start_{};
   bool has_trajectory_{false};
 };
