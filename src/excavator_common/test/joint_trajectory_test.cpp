@@ -16,6 +16,14 @@ TEST(JointPathValidationTest, AcceptsConsistentPath) {
   EXPECT_TRUE(ValidateJointPath(path).ok);
 }
 
+TEST(JointPathValidationTest, RejectsDuplicateJointNames) {
+  JointPath path;
+  path.joint_names = {"joint_a", "joint_a"};
+  path.points = {{0.0, 1.0}};
+
+  EXPECT_FALSE(ValidateJointPath(path).ok);
+}
+
 TEST(JointPathValidationTest, RejectsWrongJointCount) {
   JointPath path;
   path.joint_names = {"joint_a", "joint_b"};
@@ -30,6 +38,14 @@ TEST(JointTrajectoryValidationTest, AcceptsIncreasingTimes) {
   trajectory.points = {{0.0, {0.0}, {}, {}}, {1.0, {1.0}, {}, {}}};
 
   EXPECT_TRUE(ValidateJointTrajectory(trajectory).ok);
+}
+
+TEST(JointTrajectoryValidationTest, RejectsDuplicateJointNames) {
+  JointTrajectory trajectory;
+  trajectory.joint_names = {"joint_a", "joint_a"};
+  trajectory.points = {{0.0, {0.0, 1.0}, {}, {}}};
+
+  EXPECT_FALSE(ValidateJointTrajectory(trajectory).ok);
 }
 
 TEST(JointTrajectoryValidationTest, RejectsNonIncreasingTimes) {
