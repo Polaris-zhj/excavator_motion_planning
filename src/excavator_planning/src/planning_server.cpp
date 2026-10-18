@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -38,12 +39,21 @@ bool ReadPositions(const sensor_msgs::msg::JointState& state,
     return false;
   }
   std::unordered_map<std::string, double> values;
+  std::unordered_set<std::string> seen_names;
   for (std::size_t i = 0; i < state.name.size(); ++i) {
+    if (state.name[i].empty()) {
+      *error = "JointState contains an empty joint name";
+      return false;
+    }
+    if (!seen_names.insert(state.name[i]).second) {
+      *error = "JointState contains duplicate joint names";
+      return false;
+    }
     if (!std::isfinite(state.position[i])) {
       *error = "JointState contains a non-finite joint position";
       return false;
     }
-    values[state.name[i]] = state.position[i];
+    values.emplace(state.name[i], state.position[i]);
   }
   positions->clear();
   positions->reserve(joint_names.size());
