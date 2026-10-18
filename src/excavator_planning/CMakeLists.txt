@@ -18,6 +18,12 @@ target_include_directories(excavator_planning PUBLIC
 target_link_libraries(excavator_planning PUBLIC excavator_common)
 target_compile_options(excavator_planning PRIVATE -Wall -Wextra -Wpedantic)
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(baseline_planners_test test/baseline_planners_test.cpp)
+  target_link_libraries(baseline_planners_test excavator_planning)
+endif()
+
 install(TARGETS excavator_planning EXPORT excavator_planningTargets
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
