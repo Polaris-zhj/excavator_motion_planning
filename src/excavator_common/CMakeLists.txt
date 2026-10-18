@@ -15,6 +15,12 @@ target_include_directories(excavator_common INTERFACE
   $<INSTALL_INTERFACE:include>
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(joint_trajectory_test test/joint_trajectory_test.cpp)
+  target_link_libraries(joint_trajectory_test excavator_common)
+endif()
+
 install(DIRECTORY include/ DESTINATION include)
 install(TARGETS excavator_common EXPORT excavator_commonTargets)
 ament_export_targets(excavator_commonTargets HAS_LIBRARY_TARGET)
