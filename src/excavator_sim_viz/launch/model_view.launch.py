@@ -36,6 +36,12 @@ def generate_launch_description():
             output="screen",
         ),
         Node(
+            package="excavator_sim_viz",
+            executable="trajectory_executor",
+            name="excavator_trajectory_executor",
+            output="screen",
+        ),
+        Node(
             package="rviz2",
             executable="rviz2",
             name="rviz2",
