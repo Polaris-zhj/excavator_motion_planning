@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "kinematics/kinematics_interface.hpp"
@@ -22,6 +23,8 @@ class UrdfKinematicsModel final : public KinematicsModel {
   UrdfKinematicsModel& operator=(const UrdfKinematicsModel&) = delete;
 
   ValidationResult InitializeFromFile(const std::string& urdf_path);
+  ValidationResult InitializeFromString(const std::string& urdf_xml);
+  std::vector<std::pair<double, double>> GetPositionLimits() const;
   const std::vector<std::string>& joint_names() const;
 
   ValidationResult GetLinkPose(const JointPositions& joint_positions,
