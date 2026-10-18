@@ -96,7 +96,7 @@ struct UrdfKinematicsModel::Impl {
     }
 
     std::vector<JointMotion> reversed;
-    while (link && link->parent_joint) {
+    while (link && link->name != "base_link" && link->parent_joint) {
       JointMotion motion;
       motion.name = link->parent_joint->name;
       motion.joint = link->parent_joint;
