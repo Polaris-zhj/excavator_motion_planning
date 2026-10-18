@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -36,9 +37,27 @@ struct ValidationResult {
   std::string message;
 };
 
-inline ValidationResult ValidateJointPath(const JointPath& path) {
-  if (path.joint_names.empty()) {
+inline ValidationResult ValidateJointNames(
+    const std::vector<std::string>& joint_names) {
+  if (joint_names.empty()) {
     return {false, "joint_names must not be empty"};
+  }
+  std::unordered_set<std::string> unique_names;
+  for (const std::string& name : joint_names) {
+    if (name.empty()) {
+      return {false, "joint_names must not contain empty names"};
+    }
+    if (!unique_names.insert(name).second) {
+      return {false, "joint_names must not contain duplicates"};
+    }
+  }
+  return {true, ""};
+}
+
+inline ValidationResult ValidateJointPath(const JointPath& path) {
+  const ValidationResult names_validation = ValidateJointNames(path.joint_names);
+  if (!names_validation.ok) {
+    return names_validation;
   }
   if (path.points.empty()) {
     return {false, "path must contain at least one point"};
@@ -60,8 +79,10 @@ inline ValidationResult ValidateJointPath(const JointPath& path) {
 
 inline ValidationResult ValidateJointTrajectory(
     const JointTrajectory& trajectory) {
-  if (trajectory.joint_names.empty()) {
-    return {false, "joint_names must not be empty"};
+  const ValidationResult names_validation =
+      ValidateJointNames(trajectory.joint_names);
+  if (!names_validation.ok) {
+    return names_validation;
   }
   if (trajectory.points.empty()) {
     return {false, "trajectory must contain at least one point"};
