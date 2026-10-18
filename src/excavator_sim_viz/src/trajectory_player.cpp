@@ -10,6 +10,7 @@
 
 #include "builtin_interfaces/msg/duration.hpp"
 #include "excavator_sim_viz/kinematic_simulator.hpp"
+#include "excavator_interfaces/msg/execution_status.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
@@ -19,6 +20,7 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 using JointTrajectoryMessage = trajectory_msgs::msg::JointTrajectory;
+using ExecutionStatusMessage = excavator_interfaces::msg::ExecutionStatus;
 
 double ToSeconds(const builtin_interfaces::msg::Duration& duration) {
   return static_cast<double>(duration.sec) +
@@ -61,6 +63,9 @@ class TrajectoryPlayer final : public rclcpp::Node {
 
     joint_state_publisher_ =
         create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
+    status_publisher_ = create_publisher<ExecutionStatusMessage>(
+        "/execution_status", 10);
+    PublishStatus(ExecutionStatusMessage::IDLE, "ready", 0.0);
     trajectory_subscription_ = create_subscription<JointTrajectoryMessage>(
         "/joint_trajectory", 10,
         [this](JointTrajectoryMessage::ConstSharedPtr message) {
@@ -80,12 +85,28 @@ class TrajectoryPlayer final : public rclcpp::Node {
   }
 
  private:
+  void PublishStatus(std::uint8_t state, const std::string& message,
+                     double elapsed_time) {
+    if (last_status_state_ == state) {
+      return;
+    }
+    last_status_state_ = state;
+    ExecutionStatusMessage status;
+    status.header.stamp = now();
+    status.state = state;
+    status.message = message;
+    status.elapsed_time = elapsed_time;
+    status.tracking_error_norm = 0.0;
+    status_publisher_->publish(status);
+  }
+
   void ReceiveTrajectory(JointTrajectoryMessage::ConstSharedPtr message) {
     auto trajectory = ToCoreTrajectory(*message);
     const auto validation = tramcar::planning::ValidateJointTrajectory(trajectory);
     if (!validation.ok) {
       RCLCPP_WARN(get_logger(), "Rejected trajectory: %s",
                   validation.message.c_str());
+      PublishStatus(ExecutionStatusMessage::REJECTED, validation.message, 0.0);
       return;
     }
 
@@ -94,9 +115,11 @@ class TrajectoryPlayer final : public rclcpp::Node {
     if (!result.ok) {
       RCLCPP_WARN(get_logger(), "Rejected trajectory: %s",
                   result.message.c_str());
+      PublishStatus(ExecutionStatusMessage::REJECTED, result.message, 0.0);
       return;
     }
     last_step_ = Clock::now();
+    PublishStatus(ExecutionStatusMessage::RUNNING, "trajectory accepted", 0.0);
     RCLCPP_INFO(get_logger(), "Accepted trajectory with %zu joints and %zu points",
                 trajectory.joint_names.size(), trajectory.points.size());
   }
@@ -118,6 +141,11 @@ class TrajectoryPlayer final : public rclcpp::Node {
       }
     }
 
+    if (simulation_state.trajectory_finished) {
+      PublishStatus(ExecutionStatusMessage::SUCCEEDED, "trajectory completed",
+                    simulation_state.elapsed_time);
+    }
+
     sensor_msgs::msg::JointState state;
     state.header.stamp = now();
     state.name = simulation_state.joint_names;
@@ -136,6 +164,8 @@ class TrajectoryPlayer final : public rclcpp::Node {
 
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr
       joint_state_publisher_;
+  rclcpp::Publisher<ExecutionStatusMessage>::SharedPtr status_publisher_;
+  std::uint8_t last_status_state_{255};
   rclcpp::Subscription<JointTrajectoryMessage>::SharedPtr
       trajectory_subscription_;
   rclcpp::TimerBase::SharedPtr timer_;
