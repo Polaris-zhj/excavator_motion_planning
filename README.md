@@ -13,7 +13,7 @@ The `excavator_description` package is included under `src/excavator_description
 - `stick_joint`
 - `bucket_joint`
 
-The Xacro also defines the `bucket_tip` frame for end-effector queries. The original model's package metadata declares BSD-3-Clause; see [model attribution and licensing](src/excavator_description/NOTICE.md). Most mesh assets were copied from [Polaris-zhj/ws_excavator](https://github.com/Polaris-zhj/ws_excavator). The source `base_link.STL` was too large for the available GitHub content transfer path, so the migrated package currently uses a small generated chassis/track approximation at that filename. Replace it with the original CAD mesh when transferring the full source file through a local Git clone.
+The Xacro also defines the `bucket_tip` frame for end-effector queries. The original model's package metadata declares BSD-3-Clause; see [model attribution and licensing](src/excavator_description/NOTICE.md). Most mesh assets were copied from [Polaris-zhj/ws_excavator](https://github.com/Polaris-zhj/ws_excavator). The source `base_link.STL` was too large for the available GitHub content transfer path, so the migrated package currently uses a small generated chassis/track approximation at that filename. Restore it from a local upstream checkout with `bash scripts/replace_base_link_mesh.sh ../ws_excavator`.
 
 ## Packages
 
