@@ -10,6 +10,7 @@
 
 #include "builtin_interfaces/msg/duration.hpp"
 #include "excavator_common/planner_interfaces.hpp"
+#include "excavator_collision/collision_checker.hpp"
 #include "excavator_interfaces/action/plan_trajectory.hpp"
 #include "kinematics/urdf_kinematics_model.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -105,6 +106,8 @@ class PlanningServer final : public rclcpp::Node {
         declare_parameter<std::string>("robot_description", "");
     const double max_joint_step =
         declare_parameter<double>("max_joint_step", 0.05);
+    max_collision_joint_step_ =
+        declare_parameter<double>("max_collision_joint_step", 0.03);
     max_acceleration_ = declare_parameter<std::vector<double>>(
         "max_acceleration", {1.0, 0.6, 0.8, 1.0});
 
@@ -121,10 +124,20 @@ class PlanningServer final : public rclcpp::Node {
           max_joint_step <= 0.0) {
         RCLCPP_ERROR(get_logger(),
                      "Planning joint limits or max_joint_step are invalid");
+      } else if (max_collision_joint_step_ <= 0.0 ||
+                 !std::isfinite(max_collision_joint_step_)) {
+        RCLCPP_ERROR(get_logger(), "max_collision_joint_step must be finite and positive");
       } else {
-        path_planner_ = std::make_unique<LinearPathPlanner>(
-            joint_names_, position_limits, max_joint_step);
-        initialized_ = true;
+        const auto collision_init = collision_checker_.Initialize(
+            robot_description, joint_names_);
+        if (!collision_init.ok) {
+          RCLCPP_ERROR(get_logger(), "Failed to initialize collision checker: %s",
+                       collision_init.message.c_str());
+        } else {
+          path_planner_ = std::make_unique<LinearPathPlanner>(
+              joint_names_, position_limits, max_joint_step);
+          initialized_ = true;
+        }
       }
     }
 
@@ -167,15 +180,6 @@ class PlanningServer final : public rclcpp::Node {
       return;
     }
 
-    if (!goal->planning_scene.objects.empty()) {
-      result->success = false;
-      result->message =
-          "planning scene contains obstacles but collision checking is not "
-          "implemented; request rejected rather than claiming a safe path";
-      goal_handle->abort(result);
-      return;
-    }
-
     JointPositions start;
     JointPositions target;
     std::string error;
@@ -212,6 +216,20 @@ class PlanningServer final : public rclcpp::Node {
       return;
     }
 
+    feedback->stage = "collision_check";
+    feedback->progress = 0.45F;
+    feedback->message = "checking sampled joint-space path for self and environment collisions";
+    goal_handle->publish_feedback(feedback);
+
+    const CollisionCheckResult path_collision = collision_checker_.CheckPath(
+        path_response.path, goal->planning_scene, max_collision_joint_step_);
+    if (!path_collision.valid || path_collision.collision) {
+      result->success = false;
+      result->message = "path collision validation failed: " + path_collision.message;
+      goal_handle->abort(result);
+      return;
+    }
+
     feedback->stage = "time_parameterization";
     feedback->progress = 0.6F;
     feedback->message = "assigning conservative segment durations";
@@ -230,6 +248,18 @@ class PlanningServer final : public rclcpp::Node {
       return;
     }
 
+    const CollisionCheckResult trajectory_collision =
+        collision_checker_.CheckTrajectory(time_response.trajectory,
+                                           goal->planning_scene,
+                                           max_collision_joint_step_);
+    if (!trajectory_collision.valid || trajectory_collision.collision) {
+      result->success = false;
+      result->message = "trajectory collision validation failed: " +
+                        trajectory_collision.message;
+      goal_handle->abort(result);
+      return;
+    }
+
     if (goal_handle->is_canceling()) {
       result->success = false;
       result->message = "planning request canceled";
@@ -239,8 +269,8 @@ class PlanningServer final : public rclcpp::Node {
     result->success = true;
     result->trajectory = ToRosTrajectory(time_response.trajectory);
     result->message =
-        "baseline trajectory generated; collision avoidance and final "
-        "collision validation are not implemented";
+        "trajectory generated and sampled FCL collision checks passed; "
+        "sampling does not prove continuous collision freedom";
     feedback->stage = "complete";
     feedback->progress = 1.0F;
     feedback->message = result->message;
@@ -250,6 +280,8 @@ class PlanningServer final : public rclcpp::Node {
 
   std::vector<std::string> joint_names_;
   UrdfKinematicsModel kinematics_;
+  UrdfFclCollisionChecker collision_checker_;
+  double max_collision_joint_step_{0.03};
   std::vector<double> max_velocity_;
   std::vector<double> max_acceleration_;
   std::unique_ptr<LinearPathPlanner> path_planner_;
