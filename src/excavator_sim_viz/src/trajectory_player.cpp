@@ -102,14 +102,13 @@ class TrajectoryPlayer final : public rclcpp::Node {
   }
 
   void PublishCurrentState() {
-    const auto current_time = Clock::now();
-    const double dt =
-        std::chrono::duration<double>(current_time - last_step_).count();
-    last_step_ = current_time;
-
     SimulationState simulation_state;
     {
       std::lock_guard<std::mutex> lock(mutex_);
+      const auto current_time = Clock::now();
+      const double dt =
+          std::chrono::duration<double>(current_time - last_step_).count();
+      last_step_ = current_time;
       const auto result = simulator_.Step(dt, &simulation_state);
       if (!result.ok) {
         RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000,
