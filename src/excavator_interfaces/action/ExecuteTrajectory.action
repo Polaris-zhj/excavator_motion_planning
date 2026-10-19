@@ -1,5 +1,9 @@
 trajectory_msgs/JointTrajectory trajectory
 bool require_confirmation
+# Simulation-only: move the kinematic simulator to the trajectory start before
+# the final continuity/collision checks. Rejected when the controller parameter
+# allow_simulator_initialization is false (hardware mode).
+bool initialize_to_start
 ---
 bool success
 string message

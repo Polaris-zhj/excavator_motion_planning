@@ -3,6 +3,17 @@ sensor_msgs/JointState goal_state
 string target_link
 builtin_interfaces/Duration allowed_planning_time
 PlanningScene planning_scene
+# When true, goal_state is ignored and target_pose (expressed in the URDF
+# base_link frame) is solved with the numeric IK baseline before planning.
+bool use_pose_goal
+geometry_msgs/Pose target_pose
+# A 4-DOF excavator arm cannot realize an arbitrary 6-DOF pose. When false,
+# IK solves the target position and ignores the orientation residual.
+bool constrain_orientation
+# When true, start_state is used only as the IK seed and start_pose (base_link)
+# defines the planning start configuration.
+bool use_pose_start
+geometry_msgs/Pose start_pose
 ---
 bool success
 trajectory_msgs/JointTrajectory trajectory

@@ -14,6 +14,7 @@ find_package(excavator_common REQUIRED)
 
 add_library(kinematics
   src/urdf_kinematics_model.cpp
+  src/workspace_checker.cpp
 )
 target_include_directories(kinematics PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -29,6 +30,8 @@ if(BUILD_TESTING)
   target_compile_definitions(urdf_kinematics_test PRIVATE
     TEST_URDF_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/planar_robot.urdf")
   target_link_libraries(urdf_kinematics_test kinematics)
+  ament_add_gtest(workspace_checker_test test/workspace_checker_test.cpp)
+  target_link_libraries(workspace_checker_test kinematics)
 endif()
 
 install(TARGETS kinematics EXPORT kinematicsTargets

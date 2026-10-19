@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace tramcar {
 namespace planning {
@@ -14,15 +16,141 @@ bool IsFiniteVector(const JointPositions& values) {
                      [](double value) { return std::isfinite(value); });
 }
 
+JointPositions Interpolate(const JointPositions& start,
+                           const JointPositions& goal, double ratio) {
+  JointPositions positions(start.size(), 0.0);
+  for (std::size_t joint = 0; joint < start.size(); ++joint) {
+    positions[joint] = start[joint] + ratio * (goal[joint] - start[joint]);
+  }
+  return positions;
+}
+
+JointPath BuildPath(const std::vector<std::string>& joint_names,
+                    const std::vector<JointPositions>& waypoints,
+                    double max_joint_step) {
+  JointPath path;
+  path.joint_names = joint_names;
+  if (waypoints.empty()) {
+    return path;
+  }
+  path.points.push_back(waypoints.front());
+  for (std::size_t segment = 1; segment < waypoints.size(); ++segment) {
+    const JointPositions& start = waypoints[segment - 1];
+    const JointPositions& goal = waypoints[segment];
+    double max_delta = 0.0;
+    for (std::size_t joint = 0; joint < start.size(); ++joint) {
+      max_delta = std::max(max_delta, std::abs(goal[joint] - start[joint]));
+    }
+    const std::size_t steps = std::max<std::size_t>(
+        1, static_cast<std::size_t>(std::ceil(max_delta / max_joint_step)));
+    for (std::size_t step = 1; step <= steps; ++step) {
+      path.points.push_back(Interpolate(
+          start, goal, static_cast<double>(step) /
+                           static_cast<double>(steps)));
+    }
+  }
+  return path;
+}
+
+// A two-point path is a straight segment. Sampling it with a quintic
+// rest-to-rest time law keeps reference velocity/acceleration curves
+// consistent with the executed motion and avoids the instantaneous velocity
+// step that a constant-velocity two-point trajectory would command.
+constexpr std::size_t kQuinticSamples = 21;
+constexpr double kQuinticPeakVelocityFactor = 1.875;
+constexpr double kQuinticPeakAccelerationFactor = 5.773502691896258;
+
+bool BuildQuinticStraightTrajectory(
+    const JointPath& path, const std::vector<double>& max_velocity,
+    const std::vector<double>& max_acceleration,
+    JointTrajectory* trajectory) {
+  if (trajectory == nullptr || path.points.size() != 2 ||
+      path.points[0].size() != path.joint_names.size() ||
+      path.points[1].size() != path.joint_names.size()) {
+    return false;
+  }
+  const std::size_t joint_count = path.joint_names.size();
+  double duration = 0.0;
+  for (std::size_t joint = 0; joint < joint_count; ++joint) {
+    const double delta =
+        std::abs(path.points[1][joint] - path.points[0][joint]);
+    if (delta < 1.0e-12) {
+      continue;
+    }
+    duration = std::max(
+        duration, kQuinticPeakVelocityFactor * delta / max_velocity[joint]);
+    duration = std::max(
+        duration,
+        std::sqrt(kQuinticPeakAccelerationFactor * delta /
+                  max_acceleration[joint]));
+  }
+  if (duration <= 0.0) {
+    duration = 1.0e-3;
+  }
+  // Keep a small margin so floating-point rounding stays inside the limits.
+  duration *= 1.001;
+
+  trajectory->path_id = path.path_id;
+  trajectory->joint_names = path.joint_names;
+  trajectory->points.clear();
+  trajectory->points.reserve(kQuinticSamples);
+  for (std::size_t index = 0; index < kQuinticSamples; ++index) {
+    const double u = static_cast<double>(index) /
+                     static_cast<double>(kQuinticSamples - 1);
+    const double position_factor =
+        10.0 * u * u * u - 15.0 * u * u * u * u +
+        6.0 * u * u * u * u * u;
+    const double velocity_factor =
+        (30.0 * u * u - 60.0 * u * u * u + 30.0 * u * u * u * u) / duration;
+    const double acceleration_factor =
+        (60.0 * u - 180.0 * u * u + 120.0 * u * u * u) /
+        (duration * duration);
+    JointTrajectoryPoint point;
+    point.t = duration * u;
+    point.positions.resize(joint_count);
+    point.velocities.resize(joint_count);
+    point.accelerations.resize(joint_count);
+    for (std::size_t joint = 0; joint < joint_count; ++joint) {
+      const double delta =
+          path.points[1][joint] - path.points[0][joint];
+      point.positions[joint] =
+          path.points[0][joint] + delta * position_factor;
+      point.velocities[joint] = delta * velocity_factor;
+      point.accelerations[joint] = delta * acceleration_factor;
+    }
+    trajectory->points.push_back(std::move(point));
+  }
+  return true;
+}
+
+bool PathIsValid(const JointPath& path, const StateValidityCheck& check,
+                 const ContinueCheck& should_continue, bool* cancelled) {
+  if (!check) {
+    return true;
+  }
+  for (const JointPositions& point : path.points) {
+    if (should_continue && !should_continue()) {
+      *cancelled = true;
+      return false;
+    }
+    std::string message;
+    if (!check(point, &message)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 LinearPathPlanner::LinearPathPlanner(
     std::vector<std::string> joint_names,
     std::vector<std::pair<double, double>> joint_limits,
-    double max_joint_step)
+    double max_joint_step, std::size_t max_detour_attempts)
     : joint_names_(std::move(joint_names)),
       joint_limits_(std::move(joint_limits)),
-      max_joint_step_(max_joint_step) {}
+      max_joint_step_(max_joint_step),
+      max_detour_attempts_(max_detour_attempts) {}
 
 PlanningResponse LinearPathPlanner::Plan(const PlanningRequest& request) {
   PlanningResponse response;
@@ -40,7 +168,6 @@ PlanningResponse LinearPathPlanner::Plan(const PlanningRequest& request) {
     return response;
   }
 
-  double max_delta = 0.0;
   for (std::size_t joint = 0; joint < joint_names_.size(); ++joint) {
     const auto [lower, upper] = joint_limits_[joint];
     if (lower > upper || request.start[joint] < lower ||
@@ -49,29 +176,77 @@ PlanningResponse LinearPathPlanner::Plan(const PlanningRequest& request) {
       response.message = "start or goal violates a joint limit";
       return response;
     }
-    max_delta = std::max(max_delta,
-                         std::abs(request.goal[joint] - request.start[joint]));
   }
 
-  const std::size_t segment_count =
-      std::max<std::size_t>(1, static_cast<std::size_t>(
-                                   std::ceil(max_delta / max_joint_step_)));
-  response.path.joint_names = joint_names_;
-  response.path.points.reserve(segment_count + 1);
-  for (std::size_t index = 0; index <= segment_count; ++index) {
-    const double ratio = static_cast<double>(index) /
-                         static_cast<double>(segment_count);
-    JointPositions positions(joint_names_.size(), 0.0);
-    for (std::size_t joint = 0; joint < joint_names_.size(); ++joint) {
-      positions[joint] =
-          request.start[joint] +
-          ratio * (request.goal[joint] - request.start[joint]);
-    }
-    response.path.points.push_back(std::move(positions));
+  response.path = BuildPath(joint_names_, {request.start, request.goal},
+                            max_joint_step_);
+  if (!request.state_validity_check) {
+    response.success = true;
+    response.message =
+        "straight-line joint path generated; collision checking is not "
+        "included";
+    return response;
   }
-  response.success = true;
+
+  bool cancelled = false;
+  if (PathIsValid(response.path, request.state_validity_check,
+                  request.should_continue, &cancelled)) {
+    response.success = true;
+    response.message = "straight-line joint path is valid";
+    return response;
+  }
+  if (cancelled) {
+    response.message = "planning canceled or timed out";
+    return response;
+  }
+
+  // Finite detour candidates: shift the midpoint of the direct path in one
+  // joint at a time. This is intentionally small and incomplete; it only
+  // exercises the replaceable-planner interface and simple obstacle layouts.
+  const JointPositions midpoint =
+      Interpolate(request.start, request.goal, 0.5);
+  std::size_t attempts = 0;
+  for (const double offset : {0.4, 0.8}) {
+    for (std::size_t joint = 0; joint < joint_names_.size(); ++joint) {
+      for (const double sign : {1.0, -1.0}) {
+        if (attempts >= max_detour_attempts_) {
+          response.message =
+              "direct path is invalid and the finite detour budget is "
+              "exhausted";
+          return response;
+        }
+        ++attempts;
+        JointPositions waypoint = midpoint;
+        const double candidate =
+            waypoint[joint] + sign * offset;
+        const double clamped =
+            std::clamp(candidate, joint_limits_[joint].first,
+                       joint_limits_[joint].second);
+        if (std::abs(clamped - waypoint[joint]) < 1.0e-6) {
+          continue;
+        }
+        waypoint[joint] = clamped;
+        JointPath path = BuildPath(joint_names_,
+                                   {request.start, waypoint, request.goal},
+                                   max_joint_step_);
+        if (PathIsValid(path, request.state_validity_check,
+                        request.should_continue, &cancelled)) {
+          response.path = std::move(path);
+          response.success = true;
+          response.message =
+              "finite detour joint path generated; it is not a complete "
+              "search";
+          return response;
+        }
+        if (cancelled) {
+          response.message = "planning canceled or timed out";
+          return response;
+        }
+      }
+    }
+  }
   response.message =
-      "straight-line joint path generated; collision checking is not included";
+      "direct path is invalid and no finite detour candidate is valid";
   return response;
 }
 
@@ -100,6 +275,26 @@ TimeParameterizationResponse SimpleTimeParameterizer::Parameterize(
   }
 
   JointTrajectory trajectory;
+  if (request.path.points.size() == 2) {
+    if (BuildQuinticStraightTrajectory(request.path, request.max_velocity,
+                                       request.max_acceleration,
+                                       &trajectory)) {
+      const ValidationResult limit_validation =
+          ValidateJointTrajectoryLimits(trajectory, request.max_velocity,
+                                        request.max_acceleration);
+      if (!limit_validation.ok) {
+        response.message = limit_validation.message;
+        return response;
+      }
+      response.success = true;
+      response.trajectory = std::move(trajectory);
+      response.message =
+          "quintic rest-to-rest profile generated for a straight two-point "
+          "path";
+      return response;
+    }
+  }
+
   trajectory.path_id = request.path.path_id;
   trajectory.joint_names = request.path.joint_names;
   trajectory.points.reserve(request.path.points.size());
@@ -174,7 +369,7 @@ TimeParameterizationResponse SimpleTimeParameterizer::Parameterize(
     }
   }
 
-  if (trajectory.points.size() > 1) {
+  if (trajectory.points.size() > 2) {
     for (std::size_t index = 1; index + 1 < trajectory.points.size(); ++index) {
       const double previous_duration =
           trajectory.points[index].t - trajectory.points[index - 1].t;
@@ -228,38 +423,61 @@ ValidationResult LinearTrajectoryInterpolator::Sample(
   }
   if (t == trajectory.points.front().t) {
     *point = trajectory.points.front();
-    return {true, ""};
-  }
-  if (t == trajectory.points.back().t) {
+  } else if (t == trajectory.points.back().t) {
     *point = trajectory.points.back();
-    return {true, ""};
-  }
-
-  for (std::size_t index = 1; index < trajectory.points.size(); ++index) {
-    const auto& first = trajectory.points[index - 1];
-    const auto& second = trajectory.points[index];
-    if (t <= second.t) {
-      const double ratio = (t - first.t) / (second.t - first.t);
-      point->t = t;
-      point->positions.resize(first.positions.size());
-      point->velocities.resize(first.positions.size());
-      point->accelerations.resize(first.positions.size());
-      for (std::size_t joint = 0; joint < first.positions.size(); ++joint) {
-        point->positions[joint] =
-            first.positions[joint] +
-            ratio * (second.positions[joint] - first.positions[joint]);
+  } else {
+    bool found = false;
+    for (std::size_t index = 1; index < trajectory.points.size(); ++index) {
+      const auto& first = trajectory.points[index - 1];
+      const auto& second = trajectory.points[index];
+      if (t <= second.t) {
         const double delta_t = second.t - first.t;
-        point->velocities[joint] =
-            (second.positions[joint] - first.positions[joint]) / delta_t;
-        point->accelerations[joint] =
-            first.accelerations[joint] +
-            ratio * (second.accelerations[joint] -
-                     first.accelerations[joint]);
+        const double ratio = (t - first.t) / delta_t;
+        const std::size_t joint_count = first.positions.size();
+        const bool has_velocities =
+            first.velocities.size() == joint_count &&
+            second.velocities.size() == joint_count;
+        const bool has_accelerations =
+            first.accelerations.size() == joint_count &&
+            second.accelerations.size() == joint_count;
+        point->t = t;
+        point->positions.resize(joint_count);
+        point->velocities.resize(joint_count, 0.0);
+        point->accelerations.resize(joint_count, 0.0);
+        for (std::size_t joint = 0; joint < joint_count; ++joint) {
+          const double delta =
+              second.positions[joint] - first.positions[joint];
+          point->positions[joint] = first.positions[joint] + ratio * delta;
+          point->velocities[joint] =
+              has_velocities
+                  ? first.velocities[joint] +
+                        ratio * (second.velocities[joint] -
+                                 first.velocities[joint])
+                  : delta / delta_t;
+          point->accelerations[joint] =
+              has_accelerations
+                  ? first.accelerations[joint] +
+                        ratio * (second.accelerations[joint] -
+                                 first.accelerations[joint])
+                  : 0.0;
+        }
+        found = true;
+        break;
       }
-      return {true, ""};
+    }
+    if (!found) {
+      return {false, "failed to locate trajectory segment"};
     }
   }
-  return {false, "failed to locate trajectory segment"};
+
+  const std::size_t joint_count = point->positions.size();
+  if (point->velocities.size() != joint_count) {
+    point->velocities.assign(joint_count, 0.0);
+  }
+  if (point->accelerations.size() != joint_count) {
+    point->accelerations.assign(joint_count, 0.0);
+  }
+  return {true, ""};
 }
 
 }  // namespace planning

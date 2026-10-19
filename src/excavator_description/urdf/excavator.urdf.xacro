@@ -61,8 +61,12 @@
        2. 通用宏
        ====================================================================== -->
 
-  <!-- 单个连杆: 网格 + 惯性。visual_only:=true 时不生成碰撞体(用于液压缸等纯装饰件) -->
-  <xacro:macro name="excavator_link" params="name mesh mass ixx iyy izz color com:='0 0 0' visual_only:=false">
+  <!-- 单个连杆: 网格 + 惯性。visual_only:=true 时不生成碰撞体(用于液压缸等纯装饰件)。
+       碰撞默认使用与视觉相同的网格；若给出 collision_size，则使用由 CAD 网格
+       包围盒得到的简化 Box，以提高 FCL/规划搜索的实时性（视觉仍用完整网格）。 -->
+  <xacro:macro name="excavator_link"
+               params="name mesh mass ixx iyy izz color com:='0 0 0' visual_only:=false
+                       collision_size:='' collision_xyz:='0 0 0'">
     <link name="${name}">
       <inertial>
         <origin xyz="${com}" rpy="0 0 0"/>
@@ -76,8 +80,13 @@
       </visual>
       <xacro:unless value="${visual_only}">
         <collision>
-          <origin xyz="0 0 0" rpy="0 0 0"/>
-          <geometry><mesh filename="${mesh_dir}/${mesh}"/></geometry>
+          <origin xyz="${collision_xyz}" rpy="0 0 0"/>
+          <xacro:if value="${collision_size != ''}">
+            <geometry><box size="${collision_size}"/></geometry>
+          </xacro:if>
+          <xacro:unless value="${collision_size != ''}">
+            <geometry><mesh filename="${mesh_dir}/${mesh}"/></geometry>
+          </xacro:unless>
         </collision>
       </xacro:unless>
     </link>
@@ -135,7 +144,9 @@
   <!-- 履带底盘 (原 base_link) -->
   <xacro:excavator_link name="base_link" mesh="base_link.STL" mass="10000"
                         ixx="10833.3" iyy="10833.3" izz="20000.0" com="0 0 0.19446"
-                        color="excavator_blue"/>
+                        color="excavator_blue"
+                        collision_size="4.5963 3.3 1.1166"
+                        collision_xyz="-0.001 0 0.1617"/>
 
   <!-- 履带底面在 base_link 下方 0.397 m, 这里把底盘抬起来, 使 world 的 z=0 就是地面 -->
   <joint name="world_to_base_link" type="fixed">
@@ -146,7 +157,9 @@
 
   <!-- 回转平台 (原 cheshen) -->
   <xacro:excavator_link name="swing_link" mesh="cheshen.STL" mass="3000"
-                        ixx="2250" iyy="2250" izz="3375" color="excavator_yellow"/>
+                        ixx="2250" iyy="2250" izz="3375" color="excavator_yellow"
+                        collision_size="3.6042 2.655 1.6468"
+                        collision_xyz="-0.717 0.0525 0.8234"/>
 
   <joint name="swing_joint" type="revolute">
     <origin xyz="0 0 0.72" rpy="0 0 0"/>
@@ -174,7 +187,9 @@
   <!-- 斗杆 (原 pjjq04) -->
   <xacro:excavator_link name="stick_link" mesh="pjjq04.STL" mass="600.4"
                         ixx="26.656" iyy="564.47" izz="545.68" com="0.9223 0 0.24134"
-                        color="excavator_green"/>
+                        color="excavator_green"
+                        collision_size="3.9877 0.3 1.0195"
+                        collision_xyz="1.0405 0 0.3506"/>
 
   <joint name="stick_joint" type="revolute">
     <origin xyz="5.4177 0 1.706" rpy="0 1.2726 0"/>

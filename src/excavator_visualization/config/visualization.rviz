@@ -1,0 +1,325 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 0
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /RobotModel1
+        - /PlannedPath1
+      Splitter Ratio: 0.5
+    Tree Height: 358
+  - Class: excavator_visualization/ExcavatorPlanningPanel
+    Name: Excavator Planning
+  - Class: excavator_visualization/ExcavatorJointPlotPanel
+    Name: Excavator Joint Plot
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 30
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/robot_description
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_l_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_l_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_r_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_r_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_cyl_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_cyl_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_linkage:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_tip:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        stick_cyl_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_cyl_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_rocker_l:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_rocker_r:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        swing_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        world:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: RobotModel
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
+    - Class: rviz_default_plugins/TF
+      Enabled: false
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+      Marker Scale: 0.5
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        {}
+      Update Interval: 0
+      Value: false
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: PlannedPath
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/planned_path
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: TrajectoryOccupancy
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/trajectory_occupancy
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: CurrentTip
+      Namespaces:
+        excavator_current_tip: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/current_tip
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Obstacles
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/scene_markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: CollisionResult
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/collision_result
+      Value: true
+    - Class: rviz_default_plugins/InteractiveMarkers
+      Enable Transparency: true
+      Enabled: true
+      Interactive Markers Namespace: /excavator_target
+      Name: TargetMarker
+      Show Axes: true
+      Show Descriptions: true
+      Show Visual Aids: true
+      Value: true
+    - Class: rviz_default_plugins/InteractiveMarkers
+      Enable Transparency: true
+      Enabled: true
+      Interactive Markers Namespace: /excavator_obstacle
+      Name: ObstacleMarkers
+      Show Axes: true
+      Show Descriptions: true
+      Show Visual Aids: true
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 120; 255
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: EndEffectorPath
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/end_effector_path
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 22.220800399780273
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 2.5
+        Y: 0
+        Z: 1.2000000476837158
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.4350000321865082
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 3.9200000762939453
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Excavator Joint Plot:
+    collapsed: false
+  Excavator Planning:
+    collapsed: false
+  Height: 1529
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd0000000200000000000001c200000591fc0200000002fb000000100044006900730070006c0061007900730100000047000001ad000000f100fffffffb000000240045007800630061007600610074006f007200200050006c0061006e006e0069006e006701000001fb000003dd000001b400ffffff000000010000028500000591fc0200000001fb000000280045007800630061007600610074006f00720020004a006f0069006e007400200050006c006f00740100000047000005910000023900ffffff000005ab0000059100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Width: 2560
+  X: 0
+  Y: 34

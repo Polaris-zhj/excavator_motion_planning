@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>excavator_visualization</name>
+  <version>0.2.0</version>
+  <description>Independent RViz-based visualization, planning panel and offline replay for the excavator framework.</description>
+  <maintainer email="peng.zhang@example.com">zhj</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>shape_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>trajectory_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>excavator_common</depend>
+  <depend>excavator_interfaces</depend>
+  <depend>kinematics</depend>
+  <depend>urdf</depend>
+  <depend>interactive_markers</depend>
+  <depend>rviz_common</depend>
+  <depend>pluginlib</depend>
+  <depend>qtbase5-dev</depend>
+
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>excavator_description</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <rviz plugin="${prefix}/rviz_plugins/plugin_description.xml"/>
+  </export>
+</package>

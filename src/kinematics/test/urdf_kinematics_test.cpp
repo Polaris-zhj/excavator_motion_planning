@@ -69,6 +69,37 @@ TEST_F(UrdfKinematicsTest, RejectsWrongJointDimension) {
   EXPECT_FALSE(result.ok);
 }
 
+TEST_F(UrdfKinematicsTest, PositionOnlyIkIgnoresOrientation) {
+  Pose3 target;
+  target.position.x = 1.5;
+  target.position.y = 0.8660254;
+  target.position.z = 0.0;
+  target.orientation.w = 1.0;  // deliberately not the FK orientation
+  InverseKinematicsOptions options;
+  options.max_iterations = 200;
+  options.orientation_weight = 0.0;
+  options.orientation_tolerance = 1.0e9;
+  const auto result = model_->SolveIK(target, "tool", {0.2}, options);
+  ASSERT_TRUE(result.success) << result.message;
+  Pose3 reached;
+  ASSERT_TRUE(model_->GetLinkPose(result.joint_positions, "tool", &reached).ok);
+  EXPECT_NEAR(reached.position.x, target.position.x, 1.0e-4);
+  EXPECT_NEAR(reached.position.y, target.position.y, 1.0e-4);
+  EXPECT_NEAR(reached.position.z, target.position.z, 1.0e-4);
+}
+
+TEST_F(UrdfKinematicsTest, ReportsIkTimeBudgetExceeded) {
+  Pose3 target;
+  target.position.x = 2.0;
+  target.orientation.w = 1.0;
+  InverseKinematicsOptions options;
+  options.max_iterations = 100000;
+  options.time_budget_seconds = 1.0e-12;
+  const auto result = model_->SolveIK(target, "tool", {0.2}, options);
+  EXPECT_FALSE(result.success);
+  EXPECT_NE(result.message.find("time budget"), std::string::npos);
+}
+
 }  // namespace
 }  // namespace planning
 }  // namespace tramcar

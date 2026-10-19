@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>excavator_planner_rrtstar</name>
+  <version>0.1.0</version>
+  <description>Independent RRT* planner plugin for the excavator planning framework.</description>
+  <maintainer email="peng.zhang@example.com">zhj</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>excavator_common</depend>
+  <depend>excavator_planning</depend>
+  <depend>pluginlib</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

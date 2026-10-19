@@ -102,6 +102,20 @@ TEST(UrdfFclCollisionCheckerTest, DetectsNonAdjacentSelfCollision) {
   EXPECT_NE(result.message.find("self collision"), std::string::npos);
 }
 
+TEST(UrdfFclCollisionCheckerTest, HonoursAllowedCollisionPairs) {
+  UrdfFclCollisionChecker checker;
+  const auto initialized = checker.Initialize(kRobotUrdf, {"arm_joint"});
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+  checker.SetAllowedCollisionPairs({{"base_link", "tool_link"}});
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  const CollisionCheckResult result =
+      checker.CheckState({3.141592653589793}, scene);
+  ASSERT_TRUE(result.valid) << result.message;
+  EXPECT_FALSE(result.collision);
+}
+
 TEST(UrdfFclCollisionCheckerTest, LoadsUrdfStlCollisionMesh) {
   const std::string urdf =
       R"(<robot name="mesh_test"><link name="base_link"><collision>)"

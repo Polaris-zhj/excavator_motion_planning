@@ -1,6 +1,7 @@
 #include "kinematics/urdf_kinematics_model.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <unordered_map>
@@ -357,7 +358,13 @@ InverseKinematicsResult UrdfKinematicsModel::SolveIK(
   }
   if (!IsFinite(target_pose) || options.max_iterations == 0 ||
       options.position_tolerance <= 0.0 ||
-      options.orientation_tolerance <= 0.0 || options.damping <= 0.0) {
+      options.orientation_tolerance <= 0.0 || options.damping <= 0.0 ||
+      !std::isfinite(options.orientation_weight) ||
+      options.orientation_weight < 0.0 ||
+      !std::isfinite(options.max_joint_step) ||
+      options.max_joint_step <= 0.0 ||
+      !std::isfinite(options.time_budget_seconds) ||
+      options.time_budget_seconds <= 0.0) {
     result.message = "invalid IK target or solver options";
     return result;
   }
@@ -376,15 +383,18 @@ InverseKinematicsResult UrdfKinematicsModel::SolveIK(
                                  target_pose.position.z);
   VectorXd q = Eigen::Map<const VectorXd>(seed.data(),
       static_cast<Eigen::Index>(seed.size()));
+  const auto start_time = std::chrono::steady_clock::now();
 
-  for (std::size_t iteration = 0; iteration < options.max_iterations;
-       ++iteration) {
-    const JointPositions current_q(q.data(), q.data() + q.size());
+  auto evaluate = [&](const VectorXd& joint_values, VectorXd* weighted_error,
+                      double* position_norm, double* orientation_norm,
+                      std::string* message) -> bool {
+    const JointPositions current_q(joint_values.data(),
+                                   joint_values.data() + joint_values.size());
     Pose3 current_pose;
     const auto fk_result = GetLinkPose(current_q, link_name, &current_pose);
     if (!fk_result.ok) {
-      result.message = fk_result.message;
-      return result;
+      *message = fk_result.message;
+      return false;
     }
     const Vector3d current_position(current_pose.position.x,
                                     current_pose.position.y,
@@ -400,17 +410,42 @@ InverseKinematicsResult UrdfKinematicsModel::SolveIK(
     }
     const Eigen::AngleAxisd angle_axis(delta_orientation);
     const Vector3d orientation_error = angle_axis.axis() * angle_axis.angle();
-
     const Vector3d position_error = target_position - current_position;
-    if (position_error.norm() <= options.position_tolerance &&
-        orientation_error.norm() <= options.orientation_tolerance) {
+    *position_norm = position_error.norm();
+    *orientation_norm = orientation_error.norm();
+    weighted_error->resize(6);
+    weighted_error->head<3>() = position_error;
+    weighted_error->tail<3>() =
+        options.orientation_weight * orientation_error;
+    return true;
+  };
+
+  for (std::size_t iteration = 0; iteration < options.max_iterations;
+       ++iteration) {
+    if (std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - start_time)
+            .count() > options.time_budget_seconds) {
+      result.joint_positions.assign(q.data(), q.data() + q.size());
+      result.message = "IK time budget exceeded before convergence";
+      return result;
+    }
+    VectorXd error;
+    double position_norm = 0.0;
+    double orientation_norm = 0.0;
+    if (!evaluate(q, &error, &position_norm, &orientation_norm,
+                  &result.message)) {
+      return result;
+    }
+    if (position_norm <= options.position_tolerance &&
+        orientation_norm <= options.orientation_tolerance) {
       result.success = true;
-      result.joint_positions = current_q;
+      result.joint_positions.assign(q.data(), q.data() + q.size());
       result.iterations = iteration;
       result.message = "IK converged";
       return result;
     }
 
+    const JointPositions current_q(q.data(), q.data() + q.size());
     Jacobian jacobian_data;
     const auto jacobian_result =
         GetJacobian(current_q, link_name, &jacobian_data);
@@ -425,9 +460,6 @@ InverseKinematicsResult UrdfKinematicsModel::SolveIK(
                                        [static_cast<std::size_t>(col)];
       }
     }
-    VectorXd error(6);
-    error.head<3>() = position_error;
-    error.tail<3>() = orientation_error;
     const MatrixXd normal =
         j.transpose() * j +
         options.damping * options.damping *
@@ -437,11 +469,43 @@ InverseKinematicsResult UrdfKinematicsModel::SolveIK(
       result.message = "IK solver produced a non-finite update";
       return result;
     }
-    q += delta;
-    for (std::size_t i = 0; i < joint_names_.size(); ++i) {
-      const auto limits = impl_->limits.at(joint_names_[i]);
-      q[static_cast<Eigen::Index>(i)] =
-          std::clamp(q[static_cast<Eigen::Index>(i)], limits.first, limits.second);
+
+    // Trust region plus backtracking line search. A full Gauss-Newton step
+    // can jump past the solution and hit a joint limit, especially for a
+    // position-only solve on a redundant/singular configuration.
+    const double max_delta = delta.cwiseAbs().maxCoeff();
+    const double step_scale =
+        max_delta > options.max_joint_step ? options.max_joint_step / max_delta
+                                           : 1.0;
+    const double current_norm = error.norm();
+    bool improved = false;
+    for (const double factor : {1.0, 0.5, 0.25, 0.125, 0.0625}) {
+      VectorXd candidate = q + step_scale * factor * delta;
+      for (std::size_t i = 0; i < joint_names_.size(); ++i) {
+        const auto limits = impl_->limits.at(joint_names_[i]);
+        candidate[static_cast<Eigen::Index>(i)] =
+            std::clamp(candidate[static_cast<Eigen::Index>(i)], limits.first,
+                       limits.second);
+      }
+      VectorXd candidate_error;
+      double candidate_position_norm = 0.0;
+      double candidate_orientation_norm = 0.0;
+      std::string message;
+      if (!evaluate(candidate, &candidate_error, &candidate_position_norm,
+                    &candidate_orientation_norm, &message)) {
+        continue;
+      }
+      if (candidate_error.norm() < current_norm) {
+        q = std::move(candidate);
+        improved = true;
+        break;
+      }
+    }
+    if (!improved) {
+      result.joint_positions.assign(q.data(), q.data() + q.size());
+      result.iterations = iteration + 1;
+      result.message = "IK stalled without reducing the pose error";
+      return result;
     }
     result.iterations = iteration + 1;
   }

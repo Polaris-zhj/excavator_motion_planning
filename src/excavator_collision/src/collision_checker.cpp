@@ -55,6 +55,13 @@ bool IsFinite(const Transform& transform) {
   return transform.matrix().allFinite();
 }
 
+std::string PairKey(std::string first, std::string second) {
+  if (second < first) {
+    std::swap(first, second);
+  }
+  return first + "|" + second;
+}
+
 bool IsFinitePose(const geometry_msgs::msg::Pose& pose) {
   const Quaternion quaternion(pose.orientation.w, pose.orientation.x,
                               pose.orientation.y, pose.orientation.z);
@@ -285,6 +292,7 @@ struct UrdfFclCollisionChecker::Impl {
   std::vector<std::string> joint_names;
   std::unordered_map<std::string, std::size_t> joint_indices;
   std::vector<LinkGeometry> links;
+  std::unordered_set<std::string> allowed_pairs;
   bool initialized{false};
 
   bool ComputeLinkTransforms(
@@ -483,6 +491,7 @@ struct UrdfFclCollisionChecker::Impl {
           result.collision = true;
           result.first_link = robot.link;
           result.second_object = obstacle.first;
+          result.collision_positions = positions;
           result.message = "environment collision: " + robot.link + " with " +
                            obstacle.first;
           return result;
@@ -495,7 +504,8 @@ struct UrdfFclCollisionChecker::Impl {
         const auto& first = robot_geometry[i];
         const auto& second = robot_geometry[j];
         if (first.link == second.link || first.parent == second.link ||
-            second.parent == first.link) {
+            second.parent == first.link ||
+            allowed_pairs.count(PairKey(first.link, second.link)) > 0) {
           continue;
         }
         fcl::CollisionRequestd request;
@@ -508,6 +518,7 @@ struct UrdfFclCollisionChecker::Impl {
           result.collision = true;
           result.first_link = first.link;
           result.second_object = second.link;
+          result.collision_positions = positions;
           result.message = "self collision: " + first.link + " with " +
                            second.link;
           return result;
@@ -615,6 +626,17 @@ ValidationResult UrdfFclCollisionChecker::Initialize(
 
   impl_->initialized = true;
   return {true, ""};
+}
+
+void UrdfFclCollisionChecker::SetAllowedCollisionPairs(
+    const std::vector<std::pair<std::string, std::string>>& pairs) {
+  impl_->allowed_pairs.clear();
+  for (const auto& pair : pairs) {
+    if (!pair.first.empty() && !pair.second.empty() &&
+        pair.first != pair.second) {
+      impl_->allowed_pairs.insert(PairKey(pair.first, pair.second));
+    }
+  }
 }
 
 CollisionCheckResult UrdfFclCollisionChecker::CheckState(

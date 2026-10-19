@@ -39,6 +39,14 @@ struct InverseKinematicsOptions {
   double position_tolerance{1.0e-4};
   double orientation_tolerance{1.0e-4};
   double damping{1.0e-3};
+  // Scales the orientation error in the least-squares update. Set to 0 for a
+  // position-only solve (useful for 4-DOF machines with a 6-DOF pose target).
+  double orientation_weight{1.0};
+  // Trust-region limit for one IK iteration, in radians or metres.
+  double max_joint_step{0.2};
+  // Wall-clock budget for one SolveIK call. Non-convergence within the budget
+  // is reported as a solver failure, not as proof of unreachability.
+  double time_budget_seconds{1.0};
 };
 
 struct InverseKinematicsResult {

@@ -14,10 +14,13 @@
   <depend>excavator_common</depend>
   <depend>excavator_planning</depend>
   <depend>excavator_interfaces</depend>
+  <depend>kinematics</depend>
+  <depend>excavator_collision</depend>
   <exec_depend>excavator_description</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>rviz2</exec_depend>
+  <exec_depend>excavator_visualization</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

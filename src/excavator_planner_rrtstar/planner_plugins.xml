@@ -1,0 +1,11 @@
+<library path="excavator_rrt_star_planner">
+  <class name="excavator_planner_rrtstar/RrtStarPlanner"
+         type="tramcar::planning::RrtStarPlanner"
+         base_class_type="tramcar::planning::PlannerPlugin">
+    <description>
+      Sampling-based asymptotically optimal RRT* planner. It uses the
+      planning pipeline's state/segment validity callbacks and honors the
+      cancellation and timeout hooks.
+    </description>
+  </class>
+</library>

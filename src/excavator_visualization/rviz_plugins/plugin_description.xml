@@ -1,0 +1,18 @@
+<library path="excavator_visualization_panels">
+  <class name="excavator_visualization/ExcavatorPlanningPanel"
+         type="excavator_visualization::ExcavatorPlanningPanel"
+         base_class_type="rviz_common::Panel">
+    <description>
+      Interactive planning panel: current state start, joint-space goal,
+      box obstacle editing, plan preview and confirmed execution.
+    </description>
+  </class>
+  <class name="excavator_visualization/ExcavatorJointPlotPanel"
+         type="excavator_visualization::ExcavatorJointPlotPanel"
+         base_class_type="rviz_common::Panel">
+    <description>
+      Joint position/velocity/acceleration curves with reference versus
+      measured state comparison.
+    </description>
+  </class>
+</library>

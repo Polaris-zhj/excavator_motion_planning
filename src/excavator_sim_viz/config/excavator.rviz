@@ -44,7 +44,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /robot_description
+        Value: /excavator/robot_description
       Enabled: true
       Name: RobotModel
       TF Prefix: ""
@@ -75,21 +75,21 @@ Visualization Manager:
     - Class: rviz_default_plugins/Measure
     - Class: rviz_default_plugins/SetInitialPose
     - Class: rviz_default_plugins/SetGoal
-  Transformation:
+  Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 15
+      Distance: 16
       Focal Point:
-        X: 0
+        X: 2.5
         Y: 0
-        Z: 1
-      Pitch: 0.6
-      Yaw: 0.8
+        Z: 1.2
+      Pitch: 0.45
+      Yaw: 0.9
       Near Clip Distance: 0.01
       Target Frame: <Fixed Frame>
     Saved: ~
   Window Geometry:
-    Height: 900
-    Width: 1400
-    X: 50
-    Y: 50
+    Height: 1500
+    Width: 2400
+    X: 20
+    Y: 20

@@ -1,6 +1,7 @@
+# First version supports only complete trajectory replacement.
+uint8 REPLACE=0
+
 std_msgs/Header header
-string path_id
+uint8 update_mode
 string[] joint_names
-uint32 start_index
-bool replace_current
 trajectory_msgs/JointTrajectoryPoint[] points

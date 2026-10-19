@@ -1,0 +1,10 @@
+<library path="excavator_planning_plugins">
+  <class name="excavator_planning/LinearPlannerPlugin"
+         type="tramcar::planning::LinearPlannerPlugin"
+         base_class_type="tramcar::planning::PlannerPlugin">
+    <description>
+      Deterministic straight-line joint-space planner with a finite number of
+      single-joint detour candidates.
+    </description>
+  </class>
+</library>

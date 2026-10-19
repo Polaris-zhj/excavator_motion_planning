@@ -6,6 +6,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
@@ -35,6 +36,11 @@ if(BUILD_TESTING)
     TEST_MESH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/tetrahedron.stl")
   ament_target_dependencies(collision_checker_test excavator_interfaces)
   target_link_libraries(collision_checker_test excavator_collision)
+
+  ament_add_gtest(collision_benchmark_test
+    test/collision_benchmark_test.cpp)
+  ament_target_dependencies(collision_benchmark_test excavator_interfaces)
+  target_link_libraries(collision_benchmark_test excavator_collision)
 endif()
 
 install(TARGETS excavator_collision EXPORT excavator_collisionTargets

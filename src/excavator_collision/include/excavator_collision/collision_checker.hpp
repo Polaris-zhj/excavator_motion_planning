@@ -18,6 +18,9 @@ struct CollisionCheckResult {
   std::string message;
   std::string first_link;
   std::string second_object;
+  // Joint state at which the first collision was detected. Empty when no
+  // collision was found. Allows RViz collision highlight markers.
+  JointPositions collision_positions;
   double checked_states{0.0};
 };
 
@@ -33,6 +36,11 @@ class UrdfFclCollisionChecker final {
 
   ValidationResult Initialize(const std::string& urdf_xml,
                              std::vector<std::string> joint_names);
+
+  // Additional link pairs excluded from self-collision checking (on top of
+  // direct parent-child pairs). Order of names in a pair does not matter.
+  void SetAllowedCollisionPairs(
+      const std::vector<std::pair<std::string, std::string>>& pairs);
 
   CollisionCheckResult CheckState(
       const JointPositions& positions,
