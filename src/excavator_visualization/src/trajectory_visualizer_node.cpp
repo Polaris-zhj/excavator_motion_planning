@@ -51,24 +51,47 @@ bool BuildOccupancyVisuals(
     if (!visual && !link->visual_array.empty()) {
       visual = link->visual_array.front();
     }
-    if (!visual || !visual->geometry ||
-        visual->geometry->type != urdf::Geometry::MESH) {
-      RCLCPP_WARN(logger, "Occupancy link '%s' has no mesh visual; skipping",
-                  link_name.c_str());
-      continue;
-    }
-    const auto mesh = std::dynamic_pointer_cast<urdf::Mesh>(visual->geometry);
-    if (!mesh || mesh->filename.empty()) {
-      RCLCPP_WARN(logger, "Occupancy mesh for '%s' is invalid; skipping",
+    if (!visual || !visual->geometry) {
+      RCLCPP_WARN(logger, "Occupancy link '%s' has no visual; skipping",
                   link_name.c_str());
       continue;
     }
     tramcar::planning::visualization::LinkVisual link_visual;
+    if (visual->geometry->type == urdf::Geometry::MESH) {
+      const auto mesh =
+          std::dynamic_pointer_cast<urdf::Mesh>(visual->geometry);
+      if (!mesh || mesh->filename.empty()) {
+        RCLCPP_WARN(logger, "Occupancy mesh for '%s' is invalid; skipping",
+                    link_name.c_str());
+        continue;
+      }
+      link_visual.type =
+          tramcar::planning::visualization::LinkVisualType::kMesh;
+      link_visual.mesh_resource = mesh->filename;
+      link_visual.scale.x = mesh->scale.x;
+      link_visual.scale.y = mesh->scale.y;
+      link_visual.scale.z = mesh->scale.z;
+    } else if (visual->geometry->type == urdf::Geometry::BOX) {
+      const auto box =
+          std::dynamic_pointer_cast<urdf::Box>(visual->geometry);
+      if (!box || box->dim.x <= 0.0 || box->dim.y <= 0.0 ||
+          box->dim.z <= 0.0) {
+        RCLCPP_WARN(logger, "Occupancy box for '%s' is invalid; skipping",
+                    link_name.c_str());
+        continue;
+      }
+      link_visual.type =
+          tramcar::planning::visualization::LinkVisualType::kBox;
+      link_visual.scale.x = box->dim.x;
+      link_visual.scale.y = box->dim.y;
+      link_visual.scale.z = box->dim.z;
+    } else {
+      RCLCPP_WARN(logger,
+                  "Occupancy link '%s' uses an unsupported visual type; "
+                  "skipping", link_name.c_str());
+      continue;
+    }
     link_visual.link_name = link_name;
-    link_visual.mesh_resource = mesh->filename;
-    link_visual.scale.x = mesh->scale.x;
-    link_visual.scale.y = mesh->scale.y;
-    link_visual.scale.z = mesh->scale.z;
     link_visual.origin.position.x = visual->origin.position.x;
     link_visual.origin.position.y = visual->origin.position.y;
     link_visual.origin.position.z = visual->origin.position.z;
@@ -156,7 +179,8 @@ class TrajectoryVisualizerNode final : public rclcpp::Node {
       } else {
         occupancy_enabled_ = false;
         RCLCPP_ERROR(get_logger(),
-                     "No mesh visuals found for occupancy; preview disabled");
+                     "No mesh or box visuals found for occupancy; "
+                     "preview disabled");
       }
     } else {
       occupancy_enabled_ = false;

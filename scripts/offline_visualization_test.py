@@ -16,6 +16,7 @@ Run (after sourcing the workspace):
   python3 scripts/offline_visualization_test.py
   python3 scripts/offline_visualization_test.py --trajectory-file /path/to.csv
   python3 scripts/offline_visualization_test.py --start-rviz
+  python3 scripts/offline_visualization_test.py --model excavator_box.urdf.xacro
 
 The test is headless by default. Pass --start-rviz to also open RViz and keep
 the replay alive for 20 s (override with --hold-seconds) so the curves can be
@@ -209,6 +210,12 @@ def main():
         "--hold-seconds", type=float, default=0.0,
         help="Keep replay/RViz alive after the checks; defaults to 20 s "
              "when --start-rviz is used")
+    parser.add_argument(
+        "--model", default="excavator.urdf.xacro",
+        help="URDF xacro under excavator_description/urdf")
+    parser.add_argument(
+        "--domain-id", default=os.environ.get("ROS_DOMAIN_ID", "77"),
+        help="ROS domain used for both the replay launch and this test node")
     args = parser.parse_args()
     hold_seconds = args.hold_seconds
     if args.start_rviz and hold_seconds <= 0.0:
@@ -222,19 +229,23 @@ def main():
                             "excavator_offline_visualization_test.log")
     log = open(log_path, "w")
     mode = "RViz enabled" if args.start_rviz else "headless, RViz disabled"
-    print(f"launching offline replay ({mode}) with {args.trajectory_file}")
+    print(f"launching offline replay ({mode}, model={args.model}) "
+          f"with {args.trajectory_file}")
     process = subprocess.Popen(
         [
             "ros2", "launch", "excavator_visualization", "replay.launch.py",
             f"trajectory_file:={args.trajectory_file}",
             "loop:=true",
             f"start_rviz:={'true' if args.start_rviz else 'false'}",
+            f"model:={args.model}",
+            f"domain_id:={args.domain_id}",
         ],
         stdout=log,
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
 
+    os.environ["ROS_DOMAIN_ID"] = str(args.domain_id)
     rclpy.init()
     node = OfflineVisualizationCheck()
     failures = []
@@ -316,18 +327,25 @@ def main():
         else:
             meshes = [marker for marker in node.occupancy.markers
                       if marker.type == Marker.MESH_RESOURCE]
-            namespaces = sorted({marker.ns for marker in meshes})
-            alpha = meshes[0].color.a if meshes else 0.0
+            boxes = [marker for marker in node.occupancy.markers
+                     if marker.type == Marker.CUBE]
+            geometry_markers = meshes + boxes
+            namespaces = sorted({marker.ns for marker in geometry_markers})
+            alpha = (geometry_markers[0].color.a
+                     if geometry_markers else 0.0)
             print(f"occupancy markers: {len(node.occupancy.markers)}, "
-                  f"mesh markers: {len(meshes)}, "
+                  f"geometry markers: {len(geometry_markers)} "
+                  f"(mesh={len(meshes)}, box={len(boxes)}), "
                   f"namespaces: {namespaces}, alpha: {alpha:.2f}")
-            if len(meshes) < 8:
-                failures.append("occupancy mesh markers are missing")
+            if len(geometry_markers) < 8:
+                failures.append("occupancy geometry markers are missing")
             if len(namespaces) < 2:
                 failures.append("occupancy markers must cover multiple links")
-            if meshes and any(
-                    not marker.mesh_resource for marker in meshes):
+            if any(not marker.mesh_resource for marker in meshes):
                 failures.append("occupancy marker has an empty mesh resource")
+            if any(marker.scale.x <= 0.0 or marker.scale.y <= 0.0 or
+                   marker.scale.z <= 0.0 for marker in boxes):
+                failures.append("occupancy box marker has an invalid size")
             if node.trajectory is not None:
                 expected_pose_count = len(node.trajectory.points)
                 if (node.end_effector_path is not None and

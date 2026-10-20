@@ -25,6 +25,38 @@ python3 scripts/convert_ascii_stl_to_binary.py src/excavator_description/meshes/
 
 请遵守上游许可并核对 CAD 资源的再分发条款。
 
+### Box 几何模板
+
+`src/excavator_description/urdf/excavator_box.urdf.xacro` 是与真实网格模型**可直接替换**的纯 Box 模板：
+
+- 保留相同的 `world → base_link → swing_link → boom_link → stick_link → bucket_link` 运动链；
+- 保留全部关节名、关节原点/轴/限位、`bucket_tip`、液压缸/连杆被动关节和 `ros2_control` 接口；
+- 所有 visual/collision 使用 Box，尺寸和中心由原始 CAD 网格包围盒计算；
+- 默认模型不变，仍为 `excavator.urdf.xacro`。
+
+通过各 launch 文件的 `model` 参数选择 Box 模板：
+
+```bash
+# 完整仿真 + 控制器 + 可视化 + RViz + 规划
+ros2 launch excavator_sim_viz demo.launch.py \
+  model:=excavator_box.urdf.xacro
+
+# 仅回放 + RViz
+ros2 launch excavator_visualization replay.launch.py \
+  trajectory_file:=install/excavator_visualization/share/excavator_visualization/config/sample_trajectory.csv \
+  model:=excavator_box.urdf.xacro loop:=true start_rviz:=true
+
+# 规划服务使用 Box 碰撞几何
+ros2 launch excavator_planning planning_server.launch.py \
+  model:=excavator_box.urdf.xacro
+
+# 离线可视化测试使用 Box 模型
+python3 scripts/offline_visualization_test.py \
+  --model excavator_box.urdf.xacro
+```
+
+轨迹占用预览同时支持网格和 Box：网格模型发布 `MESH_RESOURCE` Marker，Box 模型发布 `CUBE` Marker，命名空间和数量保持一致。
+
 ## 2. 软件包结构
 
 | 软件包 | 职责 |

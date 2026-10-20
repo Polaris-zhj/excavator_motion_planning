@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Box-geometry excavator template.
+
+  This file is a drop-in alternative to excavator.urdf.xacro: it keeps the
+  same link names, joint names, joint origins/axes/limits, bucket_tip frame
+  and ros2_control interfaces, but every visual/collision shape is a Box.
+
+  Box sizes and centres were derived from the bounding boxes of the original
+  CAD meshes, so the kinematic chain and the approximate occupied volume match
+  the mesh model. The cylinder/linkage links remain visual-only, exactly like
+  the original URDF.
+
+  Use it without changing the default model:
+    ros2 launch excavator_sim_viz demo.launch.py \
+      model:=excavator_box.urdf.xacro
+-->
+<robot name="excavator_box" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="use_gazebo" default="false"/>
+  <xacro:arg name="controllers_file" default=""/>
+
+  <!-- Main-joint limits (same as the mesh model). -->
+  <xacro:property name="swing_lower"  value="-6.2832"/>
+  <xacro:property name="swing_upper"  value="6.2832"/>
+  <xacro:property name="boom_lower"   value="-0.9"/>
+  <xacro:property name="boom_upper"   value="0.35"/>
+  <xacro:property name="stick_lower"  value="-0.8"/>
+  <xacro:property name="stick_upper"  value="1.0"/>
+  <xacro:property name="bucket_lower" value="-1.4"/>
+  <xacro:property name="bucket_upper" value="1.2"/>
+
+  <!-- Keep the same tool frame as the mesh model. -->
+  <xacro:property name="bucket_tip_xyz" value="1.800 0 -0.060"/>
+
+  <material name="excavator_yellow"><color rgba="1.0 0.75 0.0 1.0"/></material>
+  <material name="excavator_orange"><color rgba="1.0 0.50 0.0 1.0"/></material>
+  <material name="excavator_green"><color rgba="0.0 0.67 0.0 1.0"/></material>
+  <material name="excavator_grey"><color rgba="0.53 0.55 0.55 1.0"/></material>
+  <material name="excavator_blue"><color rgba="0.79 0.82 0.93 1.0"/></material>
+  <material name="cylinder_body"><color rgba="0.35 0.35 0.38 1.0"/></material>
+  <material name="cylinder_rod"><color rgba="0.85 0.85 0.88 1.0"/></material>
+
+  <!-- A link with one Box visual and one Box collision. -->
+  <xacro:macro name="box_link"
+               params="name size xyz mass ixx iyy izz color com:='0 0 0'">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="${com}" rpy="0 0 0"/>
+        <mass value="${mass}"/>
+        <inertia ixx="${ixx}" ixy="0.0" ixz="0.0" iyy="${iyy}" iyz="0.0"
+                 izz="${izz}"/>
+      </inertial>
+      <visual>
+        <origin xyz="${xyz}" rpy="0 0 0"/>
+        <geometry><box size="${size}"/></geometry>
+        <material name="${color}"/>
+      </visual>
+      <collision>
+        <origin xyz="${xyz}" rpy="0 0 0"/>
+        <geometry><box size="${size}"/></geometry>
+      </collision>
+    </link>
+  </xacro:macro>
+
+  <!-- A decorative link (hydraulic cylinder, linkage, rocker): visual only. -->
+  <xacro:macro name="box_visual_link"
+               params="name size xyz mass ixx iyy izz color">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${mass}"/>
+        <inertia ixx="${ixx}" ixy="0.0" ixz="0.0" iyy="${iyy}" iyz="0.0"
+                 izz="${izz}"/>
+      </inertial>
+      <visual>
+        <origin xyz="${xyz}" rpy="0 0 0"/>
+        <geometry><box size="${size}"/></geometry>
+        <material name="${color}"/>
+      </visual>
+    </link>
+  </xacro:macro>
+
+  <!-- Hydraulic cylinder: revolute body + prismatic rod. -->
+  <xacro:macro name="box_hydraulic_cylinder"
+               params="name parent body_xyz body_rpy body_size body_center
+                       rod_xyz rod_size rod_center">
+    <xacro:box_visual_link name="${name}_body"
+      size="${body_size}" xyz="${body_center}" mass="1.0"
+      ixx="0.02" iyy="0.02" izz="0.005" color="cylinder_body"/>
+    <joint name="${name}_body_joint" type="revolute">
+      <origin xyz="${body_xyz}" rpy="${body_rpy}"/>
+      <parent link="${parent}"/>
+      <child link="${name}_body"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="-2.0" upper="2.0" effort="5000" velocity="4"/>
+    </joint>
+
+    <xacro:box_visual_link name="${name}_rod"
+      size="${rod_size}" xyz="${rod_center}" mass="1.0"
+      ixx="0.02" iyy="0.02" izz="0.005" color="cylinder_rod"/>
+    <joint name="${name}_rod_joint" type="prismatic">
+      <origin xyz="${rod_xyz}" rpy="0 0 0"/>
+      <parent link="${name}_body"/>
+      <child link="${name}_rod"/>
+      <axis xyz="0 0 -1"/>
+      <limit lower="-2.0" upper="2.0" effort="5000" velocity="4"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- ============================ links ============================ -->
+  <link name="world"/>
+
+  <!-- Bounding boxes of the original meshes. The centres match the mesh
+       bounding-box centres, so the boxes occupy the same space. -->
+  <xacro:box_link name="base_link"
+    size="4.5963 3.3000 1.1166" xyz="-0.0010 0 0.1617"
+    mass="10000" ixx="10833.3" iyy="10833.3" izz="20000.0"
+    com="0 0 0.19446" color="excavator_blue"/>
+
+  <joint name="world_to_base_link" type="fixed">
+    <origin xyz="0 0 0.397" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child link="base_link"/>
+  </joint>
+
+  <xacro:box_link name="swing_link"
+    size="3.6042 2.6550 1.6468" xyz="-0.7170 0.0525 0.8234"
+    mass="3000" ixx="2250" iyy="2250" izz="3375"
+    color="excavator_yellow"/>
+
+  <joint name="swing_joint" type="revolute">
+    <origin xyz="0 0 0.72" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="swing_link"/>
+    <axis xyz="0 0 -1"/>
+    <limit lower="${swing_lower}" upper="${swing_upper}" effort="5000"
+           velocity="0.5"/>
+    <dynamics damping="1.0" friction="40.0"/>
+  </joint>
+
+  <xacro:box_link name="boom_link"
+    size="5.6803 0.4200 1.3741" xyz="2.6938 0 1.0406"
+    mass="1440.8" ixx="321.25" iyy="3009.3" izz="2727.5"
+    com="2.2911 0 1.2825" color="excavator_orange"/>
+
+  <joint name="boom_joint" type="revolute">
+    <origin xyz="-0.009 0 1.0372" rpy="0 0 0"/>
+    <parent link="swing_link"/>
+    <child link="boom_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${boom_lower}" upper="${boom_upper}" effort="5000"
+           velocity="0.3"/>
+    <dynamics damping="1.0" friction="80.0"/>
+  </joint>
+
+  <xacro:box_link name="stick_link"
+    size="3.9877 0.3000 1.0195" xyz="1.0405 0 0.3506"
+    mass="600.4" ixx="26.656" iyy="564.47" izz="545.68"
+    com="0.9223 0 0.24134" color="excavator_green"/>
+
+  <joint name="stick_joint" type="revolute">
+    <origin xyz="5.4177 0 1.706" rpy="0 1.2726 0"/>
+    <parent link="boom_link"/>
+    <child link="stick_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${stick_lower}" upper="${stick_upper}" effort="5000"
+           velocity="0.4"/>
+    <dynamics damping="1.0" friction="80.0"/>
+  </joint>
+
+  <xacro:box_link name="bucket_link"
+    size="1.9642 1.2000 1.1148" xyz="0.8179 0 0.4978"
+    mass="359.5" ixx="94.627" iyy="138.37" izz="169.06"
+    com="0.72017 0 0.569" color="excavator_grey"/>
+
+  <joint name="bucket_joint" type="revolute">
+    <origin xyz="2.9111 0 0.15097" rpy="0 1.4717 0"/>
+    <parent link="stick_link"/>
+    <child link="bucket_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${bucket_lower}" upper="${bucket_upper}" effort="5000"
+           velocity="0.5"/>
+    <dynamics damping="1.0" friction="80.0"/>
+  </joint>
+
+  <!-- Bucket linkage, visual only (same joint as the mesh model). -->
+  <xacro:box_visual_link name="bucket_linkage"
+    size="0.1679 0.3000 0.7960" xyz="0 0 -0.3140" mass="1.973"
+    ixx="1.2029" iyy="1.0753" izz="0.1691" color="excavator_grey"/>
+  <joint name="bucket_linkage_joint" type="revolute">
+    <origin xyz="-0.10419 0 0.59088" rpy="0 0.53327 0"/>
+    <parent link="bucket_link"/>
+    <child link="bucket_linkage"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="-3.0" upper="3.0" effort="5000" velocity="1.0"/>
+  </joint>
+
+  <link name="bucket_tip"/>
+  <joint name="bucket_tip_joint" type="fixed">
+    <origin xyz="${bucket_tip_xyz}" rpy="0 0 0"/>
+    <parent link="bucket_link"/>
+    <child link="bucket_tip"/>
+  </joint>
+
+  <!-- ========================= hydraulic cylinders ================= -->
+  <xacro:box_hydraulic_cylinder name="boom_cyl_l" parent="swing_link"
+    body_xyz="0.461 0.31 0.44" body_rpy="0 0.55538 0"
+    body_size="0.1500 0.1462 1.7031" body_center="0 0 0.7784"
+    rod_xyz="0 0 0.95471"
+    rod_size="0.1191 0.1200 1.6300" rod_center="0 0 0.8150"/>
+  <xacro:box_hydraulic_cylinder name="boom_cyl_r" parent="swing_link"
+    body_xyz="0.461 -0.31 0.44" body_rpy="0 0.5538 0"
+    body_size="0.1500 0.1462 1.7031" body_center="0 0 0.7784"
+    rod_xyz="0 0 0.95471"
+    rod_size="0.1191 0.1200 1.6300" rod_center="0 0 0.8150"/>
+  <xacro:box_hydraulic_cylinder name="stick_cyl" parent="boom_link"
+    body_xyz="2.7108 0 1.6303" body_rpy="0 1.26 0"
+    body_size="0.1600 0.1560 1.9580" body_center="0 0 0.9010"
+    rod_xyz="0 0 0.7811"
+    rod_size="0.1600 0.1300 1.9380" rod_center="0 0 0.9690"/>
+  <xacro:box_hydraulic_cylinder name="bucket_cyl" parent="stick_link"
+    body_xyz="0.40628 0 0.76931" body_rpy="-3.1416 1.4945 -3.1416"
+    body_size="0.1500 0.1500 1.5350" body_center="0 0 0.6925"
+    rod_xyz="0 0 1.0701"
+    rod_size="0.1191 0.1200 1.5100" rod_center="0 0 0.7550"/>
+
+  <!-- Stick rockers, visual only. -->
+  <xacro:macro name="box_stick_rocker" params="name y">
+    <xacro:box_visual_link name="${name}"
+      size="0.1634 0.0400 0.7740" xyz="0 0 0.3050" mass="1.0"
+      ixx="0.3" iyy="0.3" izz="0.05" color="excavator_grey"/>
+    <joint name="${name}_joint" type="revolute">
+      <origin xyz="2.4617 ${y} 0.17367" rpy="0 0.84777 0"/>
+      <parent link="stick_link"/>
+      <child link="${name}"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="-3.0" upper="3.0" effort="5000" velocity="1.0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:box_stick_rocker name="stick_rocker_l" y="-0.17"/>
+  <xacro:box_stick_rocker name="stick_rocker_r" y="0.17"/>
+
+  <!-- ============================ Gazebo =========================== -->
+  <gazebo reference="base_link">
+    <mu1>0.9</mu1>
+    <mu2>0.9</mu2>
+  </gazebo>
+
+  <xacro:if value="$(arg use_gazebo)">
+    <gazebo>
+      <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+        <parameters>$(arg controllers_file)</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+  <!-- ======================= ros2_control ========================== -->
+  <ros2_control name="ExcavatorSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <joint name="swing_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="boom_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.35</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="stick_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.45</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="bucket_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+    <joint name="boom_cyl_l_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.30301</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="boom_cyl_l_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.23228</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="boom_cyl_r_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.30301</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="boom_cyl_r_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.23228</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_cyl_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.04501</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_cyl_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.36905</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="bucket_cyl_body_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.08259</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="bucket_cyl_rod_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.11620</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_rocker_l_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="stick_rocker_r_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="bucket_linkage_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">-0.40</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+</robot>

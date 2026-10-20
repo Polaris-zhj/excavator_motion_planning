@@ -96,6 +96,31 @@ TEST_F(TrajectoryVisualizerTest, BuildsMeshOccupancyPreview) {
   EXPECT_EQ(markers.markers[3].id, 1);
 }
 
+TEST_F(TrajectoryVisualizerTest, BuildsBoxOccupancyPreview) {
+  LinkVisual arm;
+  arm.type = LinkVisualType::kBox;
+  arm.link_name = "arm";
+  arm.scale = {0.5, 0.2, 0.3};
+  arm.origin.position = {0.1, 0.0, 0.2};
+  arm.alpha = 0.3F;
+
+  TrajectoryOccupancyVisualizer visualizer(kinematics_, {arm}, "base", 3);
+  visualization_msgs::msg::MarkerArray markers;
+  const auto result = visualizer.Build(MakeTrajectory(), &markers);
+  ASSERT_TRUE(result.ok) << result.message;
+  ASSERT_EQ(markers.markers.size(), 4U);
+  for (std::size_t index = 1; index < markers.markers.size(); ++index) {
+    const auto& marker = markers.markers[index];
+    EXPECT_EQ(marker.type, visualization_msgs::msg::Marker::CUBE);
+    EXPECT_TRUE(marker.mesh_resource.empty());
+    EXPECT_DOUBLE_EQ(marker.scale.x, 0.5);
+    EXPECT_DOUBLE_EQ(marker.scale.y, 0.2);
+    EXPECT_DOUBLE_EQ(marker.scale.z, 0.3);
+    EXPECT_NEAR(marker.color.a, 0.3F, 1.0e-6);
+    EXPECT_EQ(marker.ns, "excavator_occupancy_arm");
+  }
+}
+
 TEST_F(TrajectoryVisualizerTest, RejectsIncompleteOccupancyVisuals) {
   LinkVisual arm;
   arm.link_name = "arm";

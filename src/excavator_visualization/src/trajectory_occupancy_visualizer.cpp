@@ -108,8 +108,12 @@ ValidationResult TrajectoryOccupancyVisualizer::Build(
     return {false, "occupancy link visual list must not be empty"};
   }
   for (const LinkVisual& visual : link_visuals_) {
-    if (visual.link_name.empty() || visual.mesh_resource.empty()) {
-      return {false, "occupancy link visuals need link and mesh names"};
+    if (visual.link_name.empty()) {
+      return {false, "occupancy link visuals need a link name"};
+    }
+    if (visual.type == LinkVisualType::kMesh &&
+        visual.mesh_resource.empty()) {
+      return {false, "mesh occupancy visuals need a mesh resource"};
     }
     if (!IsFinite(visual.scale) || visual.scale.x <= 0.0 ||
         visual.scale.y <= 0.0 || visual.scale.z <= 0.0 ||
@@ -151,10 +155,14 @@ ValidationResult TrajectoryOccupancyVisualizer::Build(
       marker.header.frame_id = frame_id_;
       marker.ns = "excavator_occupancy_" + visual.link_name;
       marker.id = static_cast<int>(sample);
-      marker.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
+      const bool is_box = visual.type == LinkVisualType::kBox;
+      marker.type = is_box ? visualization_msgs::msg::Marker::CUBE
+                           : visualization_msgs::msg::Marker::MESH_RESOURCE;
       marker.action = visualization_msgs::msg::Marker::ADD;
-      marker.mesh_resource = visual.mesh_resource;
-      marker.mesh_use_embedded_materials = false;
+      if (!is_box) {
+        marker.mesh_resource = visual.mesh_resource;
+        marker.mesh_use_embedded_materials = false;
+      }
       marker.pose.position.x = link_pose.position.x + rotated_origin.x;
       marker.pose.position.y = link_pose.position.y + rotated_origin.y;
       marker.pose.position.z = link_pose.position.z + rotated_origin.z;

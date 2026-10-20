@@ -27,7 +27,7 @@ def generate_launch_description():
     model_file = PathJoinSubstitution([
         FindPackageShare("excavator_description"),
         "urdf",
-        "excavator.urdf.xacro",
+        LaunchConfiguration("model"),
     ])
     rviz_config = PathJoinSubstitution([
         FindPackageShare("excavator_visualization"),
@@ -38,6 +38,10 @@ def generate_launch_description():
         Command(["xacro ", model_file]), value_type=str)
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "model", default_value="excavator.urdf.xacro",
+            description="URDF xacro under excavator_description/urdf "
+                        "(excavator_box.urdf.xacro for the box template)"),
         DeclareLaunchArgument(
             "domain_id", default_value=default_domain_id,
             description="ROS 2 domain for every node started here; keeps the "

@@ -31,6 +31,7 @@ def generate_launch_description():
         ]),
         launch_arguments={
             "domain_id": LaunchConfiguration("domain_id"),
+            "model": LaunchConfiguration("model"),
         }.items())
     planning = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -42,8 +43,13 @@ def generate_launch_description():
         launch_arguments={
             "planner_class": LaunchConfiguration("planner_class"),
             "domain_id": LaunchConfiguration("domain_id"),
+            "model": LaunchConfiguration("model"),
         }.items())
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "model", default_value="excavator.urdf.xacro",
+            description="URDF xacro under excavator_description/urdf "
+                        "(excavator_box.urdf.xacro for the box template)"),
         DeclareLaunchArgument(
             "domain_id", default_value=default_domain_id,
             description="ROS 2 domain; must match the other excavator nodes"),

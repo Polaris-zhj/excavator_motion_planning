@@ -5,7 +5,8 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /RobotModel1
+        - /TF1
+        - /TF1/Frames1
         - /PlannedPath1
       Splitter Ratio: 0.5
     Tree Height: 358
@@ -45,123 +46,96 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /excavator/robot_description
-      Enabled: true
+      Enabled: false
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        boom_cyl_l_body:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        boom_cyl_l_rod:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        boom_cyl_r_body:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        boom_cyl_r_rod:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        boom_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        bucket_cyl_body:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        bucket_cyl_rod:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        bucket_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        bucket_linkage:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        bucket_tip:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        stick_cyl_body:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        stick_cyl_rod:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        stick_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        stick_rocker_l:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        stick_rocker_r:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        swing_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        world:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
       Mass Properties:
         Inertia: false
         Mass: false
       Name: RobotModel
       TF Prefix: ""
       Update Interval: 0
-      Value: true
+      Value: false
       Visual Enabled: true
     - Class: rviz_default_plugins/TF
-      Enabled: false
+      Enabled: true
       Frame Timeout: 15
       Frames:
-        All Enabled: true
-      Marker Scale: 0.5
+        All Enabled: false
+        base_link:
+          Value: true
+        boom_cyl_l_body:
+          Value: false
+        boom_cyl_l_rod:
+          Value: false
+        boom_cyl_r_body:
+          Value: false
+        boom_cyl_r_rod:
+          Value: false
+        boom_link:
+          Value: true
+        bucket_cyl_body:
+          Value: false
+        bucket_cyl_rod:
+          Value: false
+        bucket_link:
+          Value: true
+        bucket_linkage:
+          Value: false
+        bucket_tip:
+          Value: true
+        stick_cyl_body:
+          Value: false
+        stick_cyl_rod:
+          Value: false
+        stick_link:
+          Value: true
+        stick_rocker_l:
+          Value: false
+        stick_rocker_r:
+          Value: false
+        swing_link:
+          Value: true
+        world:
+          Value: true
+      Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        world:
+          base_link:
+            swing_link:
+              boom_cyl_l_body:
+                boom_cyl_l_rod:
+                  {}
+              boom_cyl_r_body:
+                boom_cyl_r_rod:
+                  {}
+              boom_link:
+                stick_cyl_body:
+                  stick_cyl_rod:
+                    {}
+                stick_link:
+                  bucket_cyl_body:
+                    bucket_cyl_rod:
+                      {}
+                  bucket_link:
+                    bucket_linkage:
+                      {}
+                    bucket_tip:
+                      {}
+                  stick_rocker_l:
+                    {}
+                  stick_rocker_r:
+                    {}
       Update Interval: 0
-      Value: false
+      Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: PlannedPath
@@ -289,25 +263,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 22.220800399780273
+      Distance: 9.862763404846191
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 2.5
-        Y: 0
-        Z: 1.2000000476837158
+        X: 4.6336774826049805
+        Y: -0.08156589418649673
+        Z: 2.119325876235962
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4350000321865082
+      Pitch: 0.4547966420650482
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 3.9200000762939453
+      Yaw: 0.27136439085006714
     Saved: ~
 Window Geometry:
   Displays:

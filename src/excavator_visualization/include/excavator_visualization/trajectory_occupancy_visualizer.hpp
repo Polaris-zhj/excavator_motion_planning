@@ -13,9 +13,16 @@ namespace tramcar {
 namespace planning {
 namespace visualization {
 
+enum class LinkVisualType {
+  kMesh = 0,
+  kBox = 1,
+};
+
 // Visual geometry of one URDF link, expressed in the link frame. Multiple
-// sampled trajectory states are rendered as semi-transparent mesh markers.
+// sampled trajectory states are rendered as semi-transparent mesh or box
+// markers. For kBox, `scale` is the box size and `mesh_resource` is unused.
 struct LinkVisual {
+  LinkVisualType type{LinkVisualType::kMesh};
   std::string link_name;
   std::string mesh_resource;
   Vector3 scale{1.0, 1.0, 1.0};
