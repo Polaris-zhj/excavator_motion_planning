@@ -13,11 +13,13 @@
 #include "builtin_interfaces/msg/duration.hpp"
 #include "excavator_common/planner_interfaces.hpp"
 #include "excavator_collision/collision_checker.hpp"
+#include "excavator_collision/collision_checker_factory.hpp"
 #include "excavator_interfaces/action/plan_trajectory.hpp"
 #include "excavator_planning/baseline_planners.hpp"
 #include "excavator_planning/path_post_processor.hpp"
 #include "excavator_planning/planner_plugin.hpp"
 #include "pluginlib/class_loader.hpp"
+#include "kinematics/dh_kinematics_model.hpp"
 #include "kinematics/urdf_kinematics_model.hpp"
 #include "kinematics/workspace_checker.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -175,9 +177,15 @@ class PlanningServer final : public rclcpp::Node {
         joint_names_(declare_parameter<std::vector<std::string>>(
             "joint_names",
             {"swing_joint", "boom_joint", "stick_joint", "bucket_joint"})),
-        kinematics_(joint_names_) {
+        kinematics_(nullptr) {
     const std::string robot_description =
         declare_parameter<std::string>("robot_description", "");
+    const std::string kinematics_backend =
+        declare_parameter<std::string>("kinematics_backend", "urdf");
+    const std::string collision_backend =
+        declare_parameter<std::string>("collision_backend", "urdf_fcl");
+    const std::string dh_parameters_file =
+        declare_parameter<std::string>("dh_parameters_file", "");
     planner_class_ = declare_parameter<std::string>(
         "planner_class", "excavator_planning/LinearPlannerPlugin");
     const double max_joint_step =
@@ -222,13 +230,32 @@ class PlanningServer final : public rclcpp::Node {
              "base_link:bucket_link", "swing_link:stick_link",
              "swing_link:bucket_link"});
 
-    const auto load_result = kinematics_.InitializeFromString(robot_description);
-    if (!load_result.ok) {
-      RCLCPP_ERROR(get_logger(), "Failed to initialize model: %s",
+    ValidationResult load_result;
+    if (kinematics_backend == "dh") {
+      if (dh_parameters_file.empty()) {
+        load_result = {false, "dh_parameters_file is required for the dh backend"};
+      } else {
+        auto model = std::make_unique<DhKinematicsModel>(joint_names_);
+        load_result = model->InitializeFromFile(dh_parameters_file);
+        if (load_result.ok) {
+          kinematics_ = std::move(model);
+        }
+      }
+    } else if (kinematics_backend == "urdf") {
+      auto model = std::make_unique<UrdfKinematicsModel>(joint_names_);
+      load_result = model->InitializeFromString(robot_description);
+      if (load_result.ok) {
+        kinematics_ = std::move(model);
+      }
+    } else {
+      load_result = {false, "unknown kinematics_backend: " + kinematics_backend};
+    }
+    if (!load_result.ok || !kinematics_) {
+      RCLCPP_ERROR(get_logger(), "Failed to initialize kinematics model: %s",
                    load_result.message.c_str());
     } else {
-      const auto position_limits = kinematics_.GetPositionLimits();
-      max_velocity_ = kinematics_.GetVelocityLimits();
+      const auto position_limits = kinematics_->GetPositionLimits();
+      max_velocity_ = kinematics_->GetVelocityLimits();
       if (position_limits.size() != joint_names_.size() ||
           max_velocity_.size() != joint_names_.size() ||
           max_acceleration_.size() != joint_names_.size() ||
@@ -240,13 +267,33 @@ class PlanningServer final : public rclcpp::Node {
         RCLCPP_ERROR(get_logger(),
                      "max_collision_joint_step must be finite and positive");
       } else {
-        const auto collision_init = collision_checker_.Initialize(
-            robot_description, joint_names_);
-        if (!collision_init.ok) {
+        collision_checker_ =
+            CollisionCheckerFactory::Instance().Create(collision_backend);
+        if (!collision_checker_) {
+          std::string available;
+          for (const std::string& type :
+               CollisionCheckerFactory::Instance().AvailableTypes()) {
+            available += " " + type;
+          }
           RCLCPP_ERROR(get_logger(),
-                       "Failed to initialize collision checker: %s",
-                       collision_init.message.c_str());
+                       "Unknown collision backend '%s'; available:%s",
+                       collision_backend.c_str(), available.c_str());
         } else {
+          CollisionModelConfig collision_config;
+          collision_config.joint_names = joint_names_;
+          collision_config.model_format =
+              collision_backend == "dh_fcl" ? "dh" : "urdf";
+          collision_config.model_source =
+              collision_config.model_format == "urdf"
+                  ? robot_description
+                  : dh_parameters_file;
+          const auto collision_init =
+              collision_checker_->Initialize(collision_config);
+          if (!collision_init.ok) {
+            RCLCPP_ERROR(get_logger(),
+                         "Failed to initialize collision checker: %s",
+                         collision_init.message.c_str());
+          } else {
           std::vector<std::pair<std::string, std::string>> allowed_pairs;
           for (const std::string& entry : allowed_collision_pairs) {
             const std::size_t separator = entry.find(':');
@@ -260,7 +307,7 @@ class PlanningServer final : public rclcpp::Node {
             allowed_pairs.emplace_back(entry.substr(0, separator),
                                        entry.substr(separator + 1));
           }
-          collision_checker_.SetAllowedCollisionPairs(allowed_pairs);
+          collision_checker_->SetAllowedCollisionPairs(allowed_pairs);
           if (max_detour_attempts < 0 || planner_max_iterations <= 0 ||
               !std::isfinite(planner_step_size) ||
               planner_step_size <= 0.0 ||
@@ -314,6 +361,7 @@ class PlanningServer final : public rclcpp::Node {
           }
         }
       }
+    }
     }
 
     planned_trajectory_publisher_ =
@@ -432,7 +480,7 @@ class PlanningServer final : public rclcpp::Node {
         collision.collision_positions.size() == joint_names_.size() &&
         !collision.first_link.empty()) {
       Pose3 pose;
-      const ValidationResult fk = kinematics_.GetLinkPose(
+      const ValidationResult fk = kinematics_->GetLinkPose(
           collision.collision_positions, collision.first_link, &pose);
       if (fk.ok) {
         visualization_msgs::msg::Marker sphere;
@@ -595,7 +643,7 @@ class PlanningServer final : public rclcpp::Node {
         start_options.orientation_weight = 0.0;
         start_options.orientation_tolerance = 1.0e9;
       }
-      const InverseKinematicsResult start_ik = kinematics_.SolveIK(
+      const InverseKinematicsResult start_ik = kinematics_->SolveIK(
           start_pose, goal->target_link, start, start_options);
       if (!start_ik.success) {
         result->success = false;
@@ -652,7 +700,7 @@ class PlanningServer final : public rclcpp::Node {
         ik_options.orientation_tolerance = 1.0e9;
       }
       const InverseKinematicsResult ik_result =
-          kinematics_.SolveIK(target_pose, goal->target_link, start,
+          kinematics_->SolveIK(target_pose, goal->target_link, start,
                               ik_options);
       if (!ik_result.success) {
         result->success = false;
@@ -675,7 +723,7 @@ class PlanningServer final : public rclcpp::Node {
     const excavator_interfaces::msg::PlanningScene scene =
         ResolveScene(goal->planning_scene);
     const CollisionCheckResult start_check =
-        collision_checker_.CheckState(start, scene);
+        collision_checker_->CheckState(start, scene);
     if (!start_check.valid || start_check.collision) {
       PublishCollisionMarkers(start_check, scene);
       result->success = false;
@@ -684,7 +732,7 @@ class PlanningServer final : public rclcpp::Node {
       return;
     }
     const CollisionCheckResult goal_check =
-        collision_checker_.CheckState(target, scene);
+        collision_checker_->CheckState(target, scene);
     if (!goal_check.valid || goal_check.collision) {
       PublishCollisionMarkers(goal_check, scene);
       result->success = false;
@@ -695,7 +743,7 @@ class PlanningServer final : public rclcpp::Node {
     auto state_validity = [this, scene](const JointPositions& positions,
                                         std::string* message) {
       const CollisionCheckResult check =
-          collision_checker_.CheckState(positions, scene);
+          collision_checker_->CheckState(positions, scene);
       if (message != nullptr) {
         *message = check.message;
       }
@@ -708,7 +756,7 @@ class PlanningServer final : public rclcpp::Node {
       JointPath segment;
       segment.joint_names = joint_names_;
       segment.points = {start_positions, goal_positions};
-      const CollisionCheckResult check = collision_checker_.CheckPath(
+      const CollisionCheckResult check = collision_checker_->CheckPath(
           segment, scene, max_collision_joint_step_);
       if (message != nullptr) {
         *message = check.message;
@@ -752,7 +800,7 @@ class PlanningServer final : public rclcpp::Node {
       const JointPath straight =
           MakeStraightPath(request.start, request.goal, joint_names_,
                            max_collision_joint_step_);
-      const CollisionCheckResult straight_check = collision_checker_.CheckPath(
+      const CollisionCheckResult straight_check = collision_checker_->CheckPath(
           straight, scene, max_collision_joint_step_);
       if (straight_check.collision) {
         PublishCollisionMarkers(straight_check, scene);
@@ -806,7 +854,7 @@ class PlanningServer final : public rclcpp::Node {
         "checking sampled path segments for self and environment collisions";
     goal_handle->publish_feedback(feedback);
 
-    const CollisionCheckResult path_collision = collision_checker_.CheckPath(
+    const CollisionCheckResult path_collision = collision_checker_->CheckPath(
         processed_path, scene, max_collision_joint_step_);
     if (!path_collision.valid || path_collision.collision) {
       PublishCollisionMarkers(path_collision, scene);
@@ -848,7 +896,7 @@ class PlanningServer final : public rclcpp::Node {
     goal_handle->publish_feedback(feedback);
 
     const CollisionCheckResult trajectory_collision =
-        collision_checker_.CheckTrajectory(time_response.trajectory, scene,
+        collision_checker_->CheckTrajectory(time_response.trajectory, scene,
                                            max_collision_joint_step_);
     if (!trajectory_collision.valid || trajectory_collision.collision) {
       PublishCollisionMarkers(trajectory_collision, scene);
@@ -862,7 +910,7 @@ class PlanningServer final : public rclcpp::Node {
       for (const JointTrajectoryPoint& point :
            time_response.trajectory.points) {
         Pose3 pose;
-        const ValidationResult fk = kinematics_.GetLinkPose(
+        const ValidationResult fk = kinematics_->GetLinkPose(
             point.positions, workspace_link_, &pose);
         if (!fk.ok) {
           result->success = false;
@@ -900,8 +948,8 @@ class PlanningServer final : public rclcpp::Node {
   }
 
   std::vector<std::string> joint_names_;
-  UrdfKinematicsModel kinematics_;
-  UrdfFclCollisionChecker collision_checker_;
+  std::unique_ptr<KinematicsModel> kinematics_;
+  std::unique_ptr<CollisionChecker> collision_checker_;
   std::string planner_class_;
   std::unique_ptr<pluginlib::ClassLoader<PlannerPlugin>> planner_loader_;
   std::shared_ptr<PlannerPlugin> path_planner_;

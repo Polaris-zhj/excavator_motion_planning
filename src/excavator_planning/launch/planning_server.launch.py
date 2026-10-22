@@ -15,6 +15,11 @@ def generate_launch_description():
         "urdf",
         LaunchConfiguration("model"),
     ])
+    dh_parameters_default = PathJoinSubstitution([
+        FindPackageShare("excavator_description"),
+        "config",
+        "excavator_dh.yaml",
+    ])
     return LaunchDescription([
         DeclareLaunchArgument(
             "model", default_value="excavator.urdf.xacro",
@@ -35,6 +40,15 @@ def generate_launch_description():
         DeclareLaunchArgument("planner_rewire_radius", default_value="0.60"),
         DeclareLaunchArgument("planner_goal_tolerance", default_value="0.15"),
         DeclareLaunchArgument("planner_random_seed", default_value="42"),
+        DeclareLaunchArgument(
+            "kinematics_backend", default_value="urdf",
+            description="Kinematics backend: urdf or dh"),
+        DeclareLaunchArgument(
+            "collision_backend", default_value="urdf_fcl",
+            description="Collision backend type (urdf_fcl; dh_fcl in phase 4)"),
+        DeclareLaunchArgument(
+            "dh_parameters_file", default_value=dh_parameters_default,
+            description="Modified-DH parameter file used by the dh backend"),
         Node(
             package="excavator_planning",
             executable="planning_server",
@@ -43,6 +57,9 @@ def generate_launch_description():
             parameters=[{
                 "robot_description": ParameterValue(
                     Command(["xacro ", model_file]), value_type=str),
+                "kinematics_backend": LaunchConfiguration("kinematics_backend"),
+                "collision_backend": LaunchConfiguration("collision_backend"),
+                "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
                 "joint_names": [
                     "swing_joint", "boom_joint", "stick_joint", "bucket_joint"
                 ],

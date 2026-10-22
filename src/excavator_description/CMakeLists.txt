@@ -5,7 +5,7 @@ find_package(ament_cmake REQUIRED)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 install(
-  DIRECTORY meshes urdf
+  DIRECTORY meshes urdf config
   DESTINATION share/${PROJECT_NAME}
 )
 

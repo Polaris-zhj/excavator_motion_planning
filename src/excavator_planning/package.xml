@@ -15,7 +15,6 @@
   <depend>trajectory_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>excavator_interfaces</depend>
-  <depend>kinematics</depend>
   <depend>excavator_collision</depend>
   <depend>pluginlib</depend>
   <exec_depend>xacro</exec_depend>

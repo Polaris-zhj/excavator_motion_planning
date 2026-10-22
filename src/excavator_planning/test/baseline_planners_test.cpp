@@ -145,20 +145,6 @@ TEST(SimpleTimeParameterizerTest, ProducesRestToRestProfileForTwoPointPath) {
   EXPECT_GT(peak_velocity, 0.0);
 }
 
-TEST(LinearTrajectoryInterpolatorTest, SamplesBetweenWaypoints) {
-  JointTrajectory trajectory;
-  trajectory.joint_names = {"joint_a"};
-  trajectory.points = {{0.0, {0.0}, {0.0}, {0.0}},
-                       {2.0, {1.0}, {0.0}, {0.0}}};
-  JointTrajectoryPoint sample;
-  const ValidationResult result =
-      LinearTrajectoryInterpolator().Sample(trajectory, 1.0, &sample);
-
-  ASSERT_TRUE(result.ok) << result.message;
-  EXPECT_DOUBLE_EQ(sample.positions[0], 0.5);
-  EXPECT_DOUBLE_EQ(sample.t, 1.0);
-}
-
 class MockPlanner final : public PathPlanner {
  public:
   PlanningResponse Plan(const PlanningRequest&) override {

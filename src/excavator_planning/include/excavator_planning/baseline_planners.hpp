@@ -37,12 +37,6 @@ class SimpleTimeParameterizer final : public TimeParameterizer {
       const TimeParameterizationRequest& request) override;
 };
 
-class LinearTrajectoryInterpolator final : public TrajectoryInterpolator {
- public:
-  ValidationResult Sample(const JointTrajectory& trajectory, double t,
-                          JointTrajectoryPoint* point) const override;
-};
-
 }  // namespace planning
 }  // namespace tramcar
 

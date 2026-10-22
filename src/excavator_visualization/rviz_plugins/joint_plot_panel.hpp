@@ -2,6 +2,7 @@
 #define EXCAVATOR_VISUALIZATION__JOINT_PLOT_PANEL_HPP_
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -14,6 +15,7 @@
 #include <QTimer>
 #include <QWidget>
 
+class QComboBox;
 class QMouseEvent;
 class QPaintEvent;
 class QWheelEvent;
@@ -22,6 +24,7 @@ class QWheelEvent;
 #include <rviz_common/panel.hpp>
 
 #include "excavator_interfaces/msg/execution_status.hpp"
+#include "excavator_visualization/measured_curve_aligner.hpp"
 #include "excavator_visualization/trajectory_plot_data.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
@@ -116,6 +119,10 @@ class ExcavatorJointPlotPanel : public rviz_common::Panel {
   bool execution_running_{false};
   bool has_execution_status_{false};
   bool reset_view_pending_{false};
+  // Drops samples taken before the arm reaches the trajectory start, anchors
+  // the start instant to t=0 and detects teleports between runs.
+  tramcar::planning::visualization::MeasuredCurveAligner aligner_;
+  std::uint8_t last_execution_state_{0};
   bool offline_started_{false};
   double offline_start_stamp_{0.0};
   double execution_elapsed_{0.0};
@@ -127,6 +134,7 @@ class ExcavatorJointPlotPanel : public rviz_common::Panel {
   JointPlotWidget* velocity_plot_{nullptr};
   JointPlotWidget* acceleration_plot_{nullptr};
   QLabel* info_label_{nullptr};
+  QComboBox* line_mode_combo_{nullptr};
   QTimer* timer_{nullptr};
 };
 

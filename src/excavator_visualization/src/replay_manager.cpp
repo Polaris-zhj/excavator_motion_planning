@@ -18,12 +18,24 @@ void SetError(std::string* error, const std::string& message) {
   }
 }
 
+std::string Trim(const std::string& text) {
+  const std::size_t begin = text.find_first_not_of(" \t\r");
+  if (begin == std::string::npos) {
+    return "";
+  }
+  const std::size_t end = text.find_last_not_of(" \t\r");
+  return text.substr(begin, end - begin + 1);
+}
+
 std::vector<std::string> Split(const std::string& line) {
   std::vector<std::string> fields;
   std::string field;
   std::istringstream stream(line);
   while (std::getline(stream, field, ',')) {
-    fields.push_back(field);
+    fields.push_back(Trim(field));
+  }
+  while (!fields.empty() && fields.back().empty()) {
+    fields.pop_back();
   }
   return fields;
 }
@@ -110,16 +122,17 @@ bool ReadContent(const std::string& path, std::vector<std::string>* joint_names,
     }
   }
   const std::size_t joint_count = joint_names->size();
-  const std::size_t expected_columns = 1 + 3 * joint_count;
+  const std::size_t full_columns = 1 + 3 * joint_count;
+  const std::size_t position_columns = 1 + joint_count;
   points->clear();
   std::size_t line_number = 1;
   while (std::getline(file, line)) {
     ++line_number;
-    if (line.empty()) {
+    const std::vector<std::string> fields = Split(line);
+    if (fields.empty()) {
       continue;
     }
-    const std::vector<std::string> fields = Split(line);
-    if (fields.size() != expected_columns) {
+    if (fields.size() != full_columns && fields.size() != position_columns) {
       SetError(error, "replay file line " + std::to_string(line_number) +
                           " has the wrong number of columns");
       return false;
@@ -130,12 +143,16 @@ bool ReadContent(const std::string& path, std::vector<std::string>* joint_names,
                           " has an invalid time");
       return false;
     }
+    const bool position_only = fields.size() == position_columns;
     point.positions.resize(joint_count);
-    point.velocities.resize(joint_count);
-    point.accelerations.resize(joint_count);
+    if (!position_only) {
+      point.velocities.resize(joint_count);
+      point.accelerations.resize(joint_count);
+    }
     JointPositions* groups[3] = {&point.positions, &point.velocities,
                                  &point.accelerations};
-    for (std::size_t group = 0; group < 3; ++group) {
+    const std::size_t group_count = position_only ? 1 : 3;
+    for (std::size_t group = 0; group < group_count; ++group) {
       for (std::size_t joint = 0; joint < joint_count; ++joint) {
         const std::size_t column = 1 + group * joint_count + joint;
         if (!ParseNumber(fields[column], &(*groups[group])[joint])) {

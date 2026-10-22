@@ -70,6 +70,24 @@ TEST(TrajectoryPlotDataTest, IgnoresOutOfOrderSamples) {
   EXPECT_DOUBLE_EQ(data.LatestActualTime(), 1.0);
 }
 
+TEST(TrajectoryPlotDataTest, KeepsOneSamplePerTimestamp) {
+  TrajectoryPlotData data;
+  data.SetReference(MakeTrajectory());
+  RobotState first;
+  first.positions = {0.1, 0.0};
+  RobotState replacement;
+  replacement.positions = {0.2, 0.0};
+  data.AddActual(0.5, first);
+  // Two samples at the same trajectory time would be drawn as a vertical
+  // segment (a visual jump). The newer state replaces the previous one.
+  data.AddActual(0.5, replacement);
+  ASSERT_EQ(data.ActualSampleCount(), 1U);
+  const PlotSeries actual =
+      data.ActualSeries(0, PlotQuantity::kPosition);
+  ASSERT_EQ(actual.values.size(), 1U);
+  EXPECT_DOUBLE_EQ(actual.values[0], 0.2);
+}
+
 TEST(TrajectoryPlotDataTest, DerivesMeasuredAcceleration) {
   TrajectoryPlotData data;
   data.SetReference(MakeTrajectory());

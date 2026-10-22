@@ -21,7 +21,6 @@
   <depend>visualization_msgs</depend>
   <depend>excavator_common</depend>
   <depend>excavator_interfaces</depend>
-  <depend>kinematics</depend>
   <depend>urdf</depend>
   <depend>interactive_markers</depend>
   <depend>rviz_common</depend>

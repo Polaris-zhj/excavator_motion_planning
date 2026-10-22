@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "excavator_common/joint_trajectory.hpp"
+#include "excavator_common/linear_trajectory_interpolator.hpp"
 #include "excavator_common/robot_state.hpp"
-#include "excavator_planning/baseline_planners.hpp"
 #include "excavator_sim_viz/controller_interface.hpp"
 
 namespace tramcar {
@@ -52,8 +52,7 @@ class KinematicSimulator final : public SimulatorInterface {
                      JointPositions initial_positions,
                      SimulatorLimits limits = {});
 
-  ValidationResult SubmitTrajectory(
-      const JointTrajectory& trajectory) override;
+  ValidationResult SubmitTrajectory(const JointTrajectory& trajectory) override;
   ValidationResult Step(double dt, SimulationState* state) override;
   ValidationResult ApplyCommand(const ControlCommand& command, double dt,
                                 SimulationState* state) override;

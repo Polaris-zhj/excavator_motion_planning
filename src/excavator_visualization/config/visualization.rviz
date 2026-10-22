@@ -46,20 +46,108 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /excavator/robot_description
-      Enabled: false
+      Enabled: true
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_l_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_l_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_r_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_cyl_r_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        boom_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_cyl_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_cyl_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_linkage:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bucket_tip:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        stick_cyl_body:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_cyl_rod:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_rocker_l:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        stick_rocker_r:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        swing_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        world:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
       Mass Properties:
         Inertia: false
         Mass: false
       Name: RobotModel
       TF Prefix: ""
       Update Interval: 0
-      Value: false
+      Value: true
       Visual Enabled: true
     - Class: rviz_default_plugins/TF
       Enabled: true
@@ -263,7 +351,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 9.862763404846191
+      Distance: 12.371850967407227
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -278,10 +366,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4547966420650482
+      Pitch: 0.6847964525222778
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 0.27136439085006714
+      Yaw: 0.926364004611969
     Saved: ~
 Window Geometry:
   Displays:

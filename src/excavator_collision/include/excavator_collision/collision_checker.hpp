@@ -3,58 +3,50 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "excavator_collision/collision_checker_interface.hpp"
 #include "excavator_common/joint_trajectory.hpp"
-#include "excavator_interfaces/msg/collision_object.hpp"
-#include "excavator_interfaces/msg/planning_scene.hpp"
 
 namespace tramcar {
 namespace planning {
 
-struct CollisionCheckResult {
-  bool valid{false};
-  bool collision{false};
-  std::string message;
-  std::string first_link;
-  std::string second_object;
-  // Joint state at which the first collision was detected. Empty when no
-  // collision was found. Allows RViz collision highlight markers.
-  JointPositions collision_positions;
-  double checked_states{0.0};
-};
-
 // URDF collision geometry checker backed by FCL. Unsupported or malformed
 // geometry fails closed: it is never silently omitted from collision checks.
-class UrdfFclCollisionChecker final {
+class UrdfFclCollisionChecker final : public CollisionChecker {
  public:
   UrdfFclCollisionChecker();
-  ~UrdfFclCollisionChecker();
+  ~UrdfFclCollisionChecker() override;
 
   UrdfFclCollisionChecker(const UrdfFclCollisionChecker&) = delete;
   UrdfFclCollisionChecker& operator=(const UrdfFclCollisionChecker&) = delete;
 
+  // Existing convenience overload, kept for tests and direct users.
   ValidationResult Initialize(const std::string& urdf_xml,
-                             std::vector<std::string> joint_names);
+                              std::vector<std::string> joint_names);
+
+  ValidationResult Initialize(
+      const CollisionModelConfig& config) override;
 
   // Additional link pairs excluded from self-collision checking (on top of
   // direct parent-child pairs). Order of names in a pair does not matter.
   void SetAllowedCollisionPairs(
-      const std::vector<std::pair<std::string, std::string>>& pairs);
+      const std::vector<std::pair<std::string, std::string>>& pairs) override;
 
   CollisionCheckResult CheckState(
       const JointPositions& positions,
-      const excavator_interfaces::msg::PlanningScene& scene) const;
+      const excavator_interfaces::msg::PlanningScene& scene) const override;
 
   CollisionCheckResult CheckPath(
       const JointPath& path,
       const excavator_interfaces::msg::PlanningScene& scene,
-      double max_joint_step) const;
+      double max_joint_step) const override;
 
   CollisionCheckResult CheckTrajectory(
       const JointTrajectory& trajectory,
       const excavator_interfaces::msg::PlanningScene& scene,
-      double max_joint_step) const;
+      double max_joint_step) const override;
 
  private:
   struct Impl;

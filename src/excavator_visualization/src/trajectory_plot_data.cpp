@@ -124,6 +124,13 @@ void TrajectoryPlotData::AddActual(double t, const RobotState& state) {
   RobotState sample = state;
   sample.t = t;
   latest_actual_time_ = std::max(latest_actual_time_, t);
+  // Keep a single sample per timestamp. Two samples at the same time would be
+  // drawn as a vertical segment, which reads as a jump in the measured curve.
+  if (!actual_.empty() && t <= latest_actual_time_ &&
+      std::abs(t - actual_.back().t) <= 1.0e-9) {
+    actual_.back() = std::move(sample);
+    return;
+  }
   actual_.push_back(std::move(sample));
   if (actual_.size() > kMaxActualSamples) {
     actual_.erase(actual_.begin(),

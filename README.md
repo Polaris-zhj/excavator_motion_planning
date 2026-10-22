@@ -63,9 +63,8 @@ python3 scripts/offline_visualization_test.py \
 | --- | --- |
 | `excavator_description` | 挖机 URDF/Xacro 与网格模型 |
 | `excavator_interfaces` | ROS 2 消息与 `PlanTrajectory`、`ExecuteTrajectory` Action 定义 |
-| `excavator_common` | `JointPath`、`JointTrajectory`、`RobotState`、执行状态枚举、关节限位与轨迹结构校验、可替换规划接口 |
-| `kinematics` | 基于 URDF 的正运动学（FK）、几何雅可比、阻尼最小二乘逆运动学（IK）及奇异性指标 |
-| `excavator_collision` | 基于 FCL 的 URDF 碰撞几何加载、自碰撞/环境碰撞与路径采样检测（Box、Sphere、Cylinder、STL） |
+| `excavator_common` | 轨迹/状态数据结构（`JointPath`、`JointTrajectory`、`RobotState`）、执行状态枚举、关节限位与轨迹校验、可替换规划接口，以及基于 URDF 或改进 DH 的正运动学（FK）、几何雅可比、阻尼最小二乘逆运动学（IK）和奇异性指标 |
+| `excavator_collision` | 碰撞检测抽象接口/工厂；当前实现为基于 FCL 的 URDF 碰撞几何加载、自碰撞/环境碰撞与路径采样检测（Box、Sphere、Cylinder、STL） |
 | `excavator_planning` | 规划器插件基类与 pluginlib 加载、直线基线规划器、分段时间参数化、轨迹插值、碰撞校验与 `/plan_trajectory` Action Server |
 | `excavator_planner_rrtstar` | 独立存放的 RRT* 规划算法插件，通过 `planner_class` 参数替换启用 |
 | `excavator_sim_viz` | `TrajectoryController`、可替换 `ControllerInterface`、速度跟踪控制器、`KinematicSimulator`、执行 Action 与 `/joint_states` 发布 |
@@ -219,7 +218,167 @@ RRT* 特性：
    `pluginlib_export_plugin_description_file(excavator_planning planner_plugins.xml)`；
 4. 启动时设置 `planner_class:=<package>/<YourPlanner>` 即可替换。
 
-`PlanTrajectory` 同时支持笛卡尔目标：设置 `use_pose_goal: true`，并把目标位姿写入 `target_pose`（参考坐标系为 URDF `base_link`）。规划服务先用 `kinematics` 的阻尼最小二乘 IK 求目标关节配置，IK 失败会返回 `IK failed: ...`，不会进入执行流程。RViz 规划面板的 “Cartesian goal” 区域对应这一入口。四自由度挖机默认只求解位置（`constrain_orientation: false`）；设置 `constrain_orientation: true` 时同时求解姿态，无法同时满足时返回 IK 失败。IK 带信赖域与回溯线搜索，并对停滞、迭代上限和 wall-clock 预算分别报告失败原因。
+`PlanTrajectory` 同时支持笛卡尔目标：设置 `use_pose_goal: true`，并把目标位姿写入 `target_pose`（参考坐标系为 URDF `base_link`）。规划服务先用 `excavator_common` 中运动学模块的阻尼最小二乘 IK 求目标关节配置，IK 失败会返回 `IK failed: ...`，不会进入执行流程。RViz 规划面板的 “Cartesian goal” 区域对应这一入口。四自由度挖机默认只求解位置（`constrain_orientation: false`）；设置 `constrain_orientation: true` 时同时求解姿态，无法同时满足时返回 IK 失败。IK 带信赖域与回溯线搜索，并对停滞、迭代上限和 wall-clock 预算分别报告失败原因。
+
+### 改进 DH 运动学与可替换碰撞后端
+
+规划计算层支持改进 DH（Modified DH / Craig）：
+
+```text
+A_i = Rx(alpha_prev) · Tx(a_prev) · Rz(theta + theta_offset) · Tz(d)
+```
+
+DH 参数位于：
+
+```text
+src/excavator_description/config/excavator_dh.yaml
+```
+
+该文件同时保存：
+
+- 基座变换；
+- 4 个主动关节的改进 DH 参数、限位和速度限位；
+- DH frame 到物理 URDF link frame 的固定偏移；
+- `bucket_tip` 工具变换。
+
+`DhKinematicsModel` 实现与 URDF 后端相同的 `KinematicsModel` 接口，并支持 FK、Jacobian、IK 和限位。当前 DH FK 与 URDF FK 已通过随机关节角的数值等价测试。
+
+启动 DH 规划后端（可视化/仿真仍使用 URDF 模型）：
+
+```bash
+ros2 launch excavator_sim_viz demo.launch.py \
+  kinematics_backend:=dh \
+  collision_backend:=urdf_fcl \
+  model:=excavator.urdf.xacro
+```
+
+默认参数保持原有行为：
+
+```yaml
+kinematics_backend: urdf
+collision_backend: urdf_fcl
+```
+
+碰撞检测已抽取 `CollisionChecker` 基类和 `CollisionCheckerFactory`：
+
+- 规划服务与控制器只依赖基类；
+- 当前注册后端为 `urdf_fcl`；
+- 第四阶段新增 `DhFclCollisionChecker` 并注册 `dh_fcl` 后，只需切换：
+
+```bash
+collision_backend:=dh_fcl
+```
+
+规划和控制器主逻辑不需要修改。默认 `urdf` / `urdf_fcl` 路径仍然完全保留。
+
+#### DH 坐标系视图
+
+无需 RViz 生成静态视图：
+
+```bash
+python3 scripts/plot_dh_frames.py --q 0,0,0,0
+# 输出：docs/screenshots/dh_frames.png
+```
+
+在 RViz 中叠加到机器人模型上：
+
+```bash
+# 终端 1：模型/TF/可视化节点（不启动默认 RViz）
+ros2 launch excavator_visualization visualization.launch.py \
+  model:=excavator_box.urdf.xacro start_static_joint_states:=true \
+  start_rviz:=false
+
+# 终端 2：发布 swing_joint..bucket_joint / bucket_tip 坐标轴和标签
+python3 scripts/publish_dh_frames.py --q 0,0,0,0
+
+# 终端 3：专用 RViz 视图
+ros2 run rviz2 rviz2 -d install/excavator_visualization/share/excavator_visualization/config/dh_frames.rviz
+```
+
+> 当前 `excavator_dh.yaml` 使用 `base.rpy=[0, 0, 0]`：`swing_joint` 的 DH X 轴与 `base_link` 的 X 轴一致，Z 轴朝上。物理回转轴仍是 `(0,0,-1)`，所以 `swing_joint` 配置了 `theta_sign: -1`；生成的 URDF 中该关节轴为 `0 0 -1`，从而保证轨迹、碰撞和可视化的物理运动一致。
+
+#### DH2URDF 生成器
+
+`scripts/generate_dh_urdf.py` 读取 `excavator_dh.yaml`，生成 DH frame 的 URDF：
+
+```bash
+python3 scripts/generate_dh_urdf.py
+# 输出：src/excavator_description/urdf/excavator_dh.urdf
+```
+
+生成器会：
+
+- 把四个主动关节的 `origin/axis` 改写为改进 DH 固定变换和 Z 轴；
+- 把主连杆的视觉、碰撞和惯性几何从物理 link frame 变换到 DH link frame；
+- 默认只保留 `base_link → swing_link → boom_link → stick_link → bucket_link → bucket_tip` 四连杆主链；
+- 液压缸、摇杆、连杆是原模型的装饰分支，不属于 DH 链，**默认移除**；需要保留时使用 `--include-passive`；
+- 保留 link/joint 名称、关节限位、主关节 `ros2_control` 和几何外观；
+- 默认以 Box 模型为几何来源，可用 `--source-model` 指定网格模型。
+
+默认生成的 `excavator_dh.urdf` 使用 Box 几何，因此外观是方块模型。需要接近真实 CAD 外观时，用网格模型生成另一份：
+
+```bash
+python3 scripts/generate_dh_urdf.py \
+  --source-model src/excavator_description/urdf/excavator.urdf.xacro \
+  --output src/excavator_description/urdf/excavator_dh_mesh.urdf
+```
+
+生成的 DH URDF 默认不包含液压缸/摇杆/连杆，这是刻意设计：DH 只描述四连杆开链。需要保留装饰件时：
+
+```bash
+python3 scripts/generate_dh_urdf.py --include-passive
+```
+
+启动网格外观的 DH 模型：
+
+```bash
+ros2 launch excavator_sim_viz demo.launch.py \
+  model:=excavator_dh_mesh.urdf \
+  kinematics_backend:=dh \
+  collision_backend:=urdf_fcl
+```
+
+验证生成结果：
+
+```bash
+xacro src/excavator_description/urdf/excavator_dh.urdf > /tmp/excavator_dh.urdf
+check_urdf /tmp/excavator_dh.urdf
+
+# 验证 DH URDF 的视觉姿态与源模型一致
+python3 scripts/check_dh_urdf_alignment.py   --source-model src/excavator_description/urdf/excavator_box.urdf.xacro   --generated src/excavator_description/urdf/excavator_dh.urdf
+
+python3 scripts/offline_visualization_test.py --model excavator_dh.urdf
+```
+
+当前对齐结果为：
+
+```text
+max position error: 3.6e-09 m
+max rotation error: 2.1e-08 rad
+DH URDF ALIGNMENT: PASS
+```
+
+使用生成的 DH URDF 运行 DH 规划：
+
+```bash
+ros2 launch excavator_sim_viz demo.launch.py \
+  model:=excavator_dh.urdf \
+  kinematics_backend:=dh \
+  collision_backend:=urdf_fcl
+```
+
+测试：
+
+```bash
+colcon test
+colcon test-result --verbose
+
+# DH 规划 + 默认 URDF 仿真
+ROS_DOMAIN_ID=77 ros2 launch excavator_sim_viz simulation.launch.py
+ROS_DOMAIN_ID=77 ros2 launch excavator_planning planning_server.launch.py \
+  kinematics_backend:=dh collision_backend:=urdf_fcl
+ROS_DOMAIN_ID=77 python3 scripts/e2e_smoke_test.py
+```
 
 ### 确认执行
 
@@ -307,8 +466,9 @@ ros2 launch excavator_visualization visualizer.launch.py
 | 离线回放（无规划器/控制器/仿真器，含轨迹与占用预览） | ![离线回放](docs/screenshots/rviz_offline_replay.png) |
 | 关节曲线：位置/速度/加速度三图同时绘制，按关节颜色区分 | ![关节曲线](docs/screenshots/rviz_joint_curves.png) |
 | 操作面板：可左右伸缩的网格布局、固定操作栏和执行进度条 | ![操作面板](docs/screenshots/rviz_planning_panel.png) |
+| 改进 DH 坐标系（按关节命名） | ![DH frames](docs/screenshots/dh_frames.png) |
 
-`Excavator Joint Plot` 面板同时绘制位置 `q(t)`、速度 `dq(t)` 和加速度 `ddq(t)` 三幅曲线图。每个关节在所有图中使用同一种固定颜色（`swing_joint` 蓝、`boom_joint` 橙、`stick_joint` 绿、`bucket_joint` 紫），图例带对应颜色的线段标记；实线为规划参考值，虚线为实测值。`JointState` 不含加速度，因此实测加速度先在相邻速度样本间做中心差分 `dv/dt`，再用 5 点零相位滑动平均抑制 100 Hz 速度信号中的跟踪噪声（`rad/s^2`）；这样保留真实加速度轮廓，参考与实测曲线基本重合，仅在启停阶段因控制器加速度限幅存在短暂偏差。
+`Excavator Joint Plot` 面板同时绘制位置 `q(t)`、速度 `dq(t)` 和加速度 `ddq(t)` 三幅曲线图。每个关节在所有图中使用同一种固定颜色（`swing_joint` 蓝、`boom_joint` 橙、`stick_joint` 绿、`bucket_joint` 紫），图例带对应颜色的线段标记；实线为规划参考值，虚线为实测值。面板顶部的 `Curves` 下拉框可选择显示 `Both (ref + measured)`、`Reference only (solid)` 或 `Measured only (dashed)`，图例文字会随选择同步更新。`JointState` 不含加速度，因此实测加速度先在相邻速度样本间做中心差分 `dv/dt`，再用 5 点零相位滑动平均抑制 100 Hz 速度信号中的跟踪噪声（`rad/s^2`）；这样保留真实加速度轮廓，参考与实测曲线基本重合，仅在启停阶段因控制器加速度限幅存在短暂偏差。
 
 三幅图都支持鼠标交互：
 
@@ -320,7 +480,7 @@ ros2 launch excavator_visualization visualizer.launch.py
 
 `Excavator Planning` 操作面板采用随停靠宽度伸缩的网格布局：拖动 RViz 面板分隔条即可左右调整宽度，输入框会随列宽自动伸缩；配置区超出高度时可滚动，`Plan / preview`、`Confirm & execute`、`Cancel`、`Stop` 以及状态和执行进度条固定在面板底部，始终可见。目标关节、规划起点、笛卡尔目标和盒状障碍物分别放在带边框的分组中，操作按钮按优先级配色。
 
-曲线时间基准与执行器一致：面板用 `ExecutionStatus.elapsed_time` 加上 `/joint_states` 的 `header.stamp` 相对状态消息时间的偏移来还原轨迹时刻。这样即使状态消息只有 10 Hz、关节状态为 100 Hz，采样时间也不会重复或抖动，差分得到的加速度不会失真。离线回放器同样发布 `/excavator/execution_status`（`RUNNING`/`COMPLETED`），因此离线曲线与参考轨迹使用同一时间轴；`loop:=true` 时每圈会清空上一圈实测数据重新采集。路径处理把直线路径简化为两个点时，时间参数化会生成五次多项式（S 曲线）速度剖面，首尾速度和加速度均为零，因此参考速度不再恒为零，实际执行也没有速度阶跃。
+曲线时间基准与执行器一致：面板用 `ExecutionStatus.elapsed_time` 加上 `/joint_states` 的 `header.stamp` 相对状态消息时间的偏移来还原轨迹时刻。这样即使状态消息只有 10 Hz、关节状态为 100 Hz，采样时间也不会重复或抖动，差分得到的加速度不会失真。每次进入新的 `RUNNING` 执行（或执行时钟回绕）时都会清空上一轮实测数据；面板只从挖机臂真正到达轨迹起点后才开始采集，并把该时刻对齐为 `t=0`。如果仿真器复位使关节位置瞬移，未到达起点前的状态会被丢弃，检测到位置不连续时也会自动重建曲线，因此重复“终点 → 起点 → 终点”执行时虚线不会把上一轮终点和新一轮起点连成跳变。同一时间戳只保留一个实测样本，避免在曲线上画出垂直线段。离线回放器同样发布 `/excavator/execution_status`（`RUNNING`/`COMPLETED`），因此离线曲线与参考轨迹使用同一时间轴；`loop:=true` 时每圈会清空上一圈实测数据重新采集。路径处理把直线路径简化为两个点时，时间参数化会生成五次多项式（S 曲线）速度剖面，首尾速度和加速度均为零，因此参考速度不再恒为零，实际执行也没有速度阶跃。
 
 `bucket_tip` 目标位姿通过 `/excavator_target/update` 的 6-DoF Interactive Marker 设置。直接拖动标记中心的绿色球即可在任意方向自由移动（不再局限于单轴/四方向），同时保留 X/Y/Z 轴手柄用于精确微调；拖动后自动填入面板 Cartesian goal。
 
@@ -441,7 +601,7 @@ python3 scripts/publish_sample_trajectory.py --loop
 
 ## 7. 运动学接口示例
 
-`kinematics` 包可以从展开后的 URDF XML 或 URDF 文件加载模型。存在 `base_link` 时，FK 以 `base_link` 为参考系；运动学调用不维护可变的“当前关节状态”。
+运动学代码已并入 `excavator_common`，头文件路径仍为 `kinematics/...`。它可以从展开后的 URDF XML 或 URDF 文件加载模型。存在 `base_link` 时，FK 以 `base_link` 为参考系；运动学调用不维护可变的“当前关节状态”。
 
 ```bash
 xacro src/excavator_description/urdf/excavator.urdf.xacro > /tmp/excavator.urdf

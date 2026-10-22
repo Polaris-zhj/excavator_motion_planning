@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<robot name="excavator_4r">
+  <link name="base_link"/>
+  <link name="swing_link"/>
+  <link name="boom_link"/>
+  <link name="stick_link"/>
+  <link name="bucket_link"/>
+  <link name="bucket_tip"/>
+
+  <joint name="swing_joint" type="revolute">
+    <origin xyz="0 0 0.72" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="swing_link"/>
+    <axis xyz="0 0 -1"/>
+    <limit lower="-6.2832" upper="6.2832" effort="5000" velocity="0.5"/>
+  </joint>
+
+  <joint name="boom_joint" type="revolute">
+    <origin xyz="-0.009 0 1.0372" rpy="0 0 0"/>
+    <parent link="swing_link"/>
+    <child link="boom_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.9" upper="0.35" effort="5000" velocity="0.3"/>
+  </joint>
+
+  <joint name="stick_joint" type="revolute">
+    <origin xyz="5.4177 0 1.706" rpy="0 1.2726 0"/>
+    <parent link="boom_link"/>
+    <child link="stick_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.8" upper="1.0" effort="5000" velocity="0.4"/>
+  </joint>
+
+  <joint name="bucket_joint" type="revolute">
+    <origin xyz="2.9111 0 0.15097" rpy="0 1.4717 0"/>
+    <parent link="stick_link"/>
+    <child link="bucket_link"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.4" upper="1.2" effort="5000" velocity="0.5"/>
+  </joint>
+
+  <joint name="bucket_tip_joint" type="fixed">
+    <origin xyz="1.8 0 -0.06" rpy="0 0 0"/>
+    <parent link="bucket_link"/>
+    <child link="bucket_tip"/>
+  </joint>
+</robot>

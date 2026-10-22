@@ -18,7 +18,9 @@ find_package(shape_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
 find_package(excavator_interfaces REQUIRED)
 
-add_library(excavator_collision src/collision_checker.cpp)
+add_library(excavator_collision
+  src/collision_checker.cpp
+  src/collision_checker_factory.cpp)
 target_include_directories(excavator_collision PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -36,6 +38,12 @@ if(BUILD_TESTING)
     TEST_MESH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/tetrahedron.stl")
   ament_target_dependencies(collision_checker_test excavator_interfaces)
   target_link_libraries(collision_checker_test excavator_collision)
+
+  ament_add_gtest(collision_checker_factory_test
+    test/collision_checker_factory_test.cpp)
+  ament_target_dependencies(collision_checker_factory_test
+    excavator_interfaces)
+  target_link_libraries(collision_checker_factory_test excavator_collision)
 
   ament_add_gtest(collision_benchmark_test
     test/collision_benchmark_test.cpp)

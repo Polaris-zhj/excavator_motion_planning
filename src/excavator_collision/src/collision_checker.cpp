@@ -538,6 +538,17 @@ UrdfFclCollisionChecker::UrdfFclCollisionChecker()
 UrdfFclCollisionChecker::~UrdfFclCollisionChecker() = default;
 
 ValidationResult UrdfFclCollisionChecker::Initialize(
+    const CollisionModelConfig& config) {
+  if (!config.model_format.empty() && config.model_format != "urdf") {
+    return {false, "urdf_fcl backend expects model_format 'urdf'"};
+  }
+  if (config.model_source.empty()) {
+    return {false, "URDF model source must not be empty"};
+  }
+  return Initialize(config.model_source, config.joint_names);
+}
+
+ValidationResult UrdfFclCollisionChecker::Initialize(
     const std::string& urdf_xml, std::vector<std::string> joint_names) {
   impl_->initialized = false;
   impl_->links.clear();

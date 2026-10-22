@@ -32,6 +32,8 @@ def generate_launch_description():
         launch_arguments={
             "domain_id": LaunchConfiguration("domain_id"),
             "model": LaunchConfiguration("model"),
+            "collision_backend": LaunchConfiguration("collision_backend"),
+            "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
         }.items())
     planning = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -44,6 +46,9 @@ def generate_launch_description():
             "planner_class": LaunchConfiguration("planner_class"),
             "domain_id": LaunchConfiguration("domain_id"),
             "model": LaunchConfiguration("model"),
+            "kinematics_backend": LaunchConfiguration("kinematics_backend"),
+            "collision_backend": LaunchConfiguration("collision_backend"),
+            "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
         }.items())
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -56,6 +61,15 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "planner_class",
             default_value="excavator_planning/LinearPlannerPlugin"),
+        DeclareLaunchArgument(
+            "kinematics_backend", default_value="urdf"),
+        DeclareLaunchArgument(
+            "collision_backend", default_value="urdf_fcl"),
+        DeclareLaunchArgument(
+            "dh_parameters_file",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("excavator_description"),
+                "config", "excavator_dh.yaml"])),
         SetEnvironmentVariable(
             "ROS_DOMAIN_ID", LaunchConfiguration("domain_id")),
         model_view,

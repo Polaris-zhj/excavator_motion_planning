@@ -60,6 +60,10 @@ class KinematicsModel {
  public:
   virtual ~KinematicsModel() = default;
 
+  virtual const std::vector<std::string>& joint_names() const = 0;
+  virtual std::vector<std::pair<double, double>> GetPositionLimits() const = 0;
+  virtual std::vector<double> GetVelocityLimits() const = 0;
+
   // Stateless forward kinematics: joint positions are inputs, not mutable
   // model state. link_name is a frame name from the loaded robot description.
   virtual ValidationResult GetLinkPose(const JointPositions& joint_positions,

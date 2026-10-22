@@ -15,9 +15,7 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
-find_package(excavator_planning REQUIRED)
 find_package(excavator_interfaces REQUIRED)
-find_package(kinematics REQUIRED)
 find_package(excavator_collision REQUIRED)
 
 add_library(excavator_simulator
@@ -27,15 +25,15 @@ add_library(excavator_simulator
 target_include_directories(excavator_simulator PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_link_libraries(excavator_simulator PUBLIC excavator_common::excavator_common
-  excavator_planning::excavator_planning)
+target_link_libraries(excavator_simulator PUBLIC excavator_common::excavator_common)
 target_compile_options(excavator_simulator PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(trajectory_controller_node src/trajectory_controller_node.cpp)
 ament_target_dependencies(trajectory_controller_node rclcpp rclcpp_action
   std_msgs sensor_msgs trajectory_msgs excavator_interfaces)
 target_link_libraries(trajectory_controller_node excavator_simulator
-  kinematics::kinematics excavator_collision::excavator_collision)
+  excavator_common::excavator_common
+  excavator_collision::excavator_collision)
 target_compile_options(trajectory_controller_node PRIVATE -Wall -Wextra -Wpedantic)
 
 if(BUILD_TESTING)
@@ -54,5 +52,5 @@ install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
 ament_export_targets(excavator_sim_vizTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
-ament_export_dependencies(excavator_common excavator_planning)
+ament_export_dependencies(excavator_common)
 ament_package()

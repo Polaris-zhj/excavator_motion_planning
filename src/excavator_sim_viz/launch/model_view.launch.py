@@ -43,6 +43,8 @@ def generate_launch_description():
             "ROS_DOMAIN_ID", LaunchConfiguration("domain_id")),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("start_visualization", default_value="true"),
+        DeclareLaunchArgument("collision_backend", default_value="urdf_fcl"),
+        DeclareLaunchArgument("dh_parameters_file", default_value=""),
         Node(
             package="robot_state_publisher",
             executable="robot_state_publisher",
@@ -71,6 +73,8 @@ def generate_launch_description():
                 "max_collision_joint_step": 0.03,
                 "require_collision_check": True,
                 "allow_simulator_initialization": True,
+                "collision_backend": LaunchConfiguration("collision_backend"),
+                "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
             }],
         ),

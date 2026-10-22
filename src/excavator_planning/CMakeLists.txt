@@ -17,7 +17,6 @@ find_package(shape_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(excavator_interfaces REQUIRED)
-find_package(kinematics REQUIRED)
 find_package(excavator_common REQUIRED)
 find_package(excavator_collision REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -40,8 +39,8 @@ add_executable(planning_server src/planning_server.cpp)
 ament_target_dependencies(planning_server rclcpp rclcpp_action builtin_interfaces
   sensor_msgs shape_msgs trajectory_msgs visualization_msgs pluginlib
   excavator_interfaces excavator_collision)
-target_link_libraries(planning_server excavator_planning kinematics::kinematics
-  excavator_collision::excavator_collision)
+target_link_libraries(planning_server excavator_planning
+  excavator_common::excavator_common excavator_collision::excavator_collision)
 target_compile_options(planning_server PRIVATE -Wall -Wextra -Wpedantic)
 target_include_directories(excavator_planning PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

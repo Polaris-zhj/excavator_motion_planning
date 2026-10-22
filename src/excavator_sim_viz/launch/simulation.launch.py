@@ -22,6 +22,8 @@ def generate_launch_description():
         LaunchConfiguration("model"),
     ])
     return LaunchDescription([
+        DeclareLaunchArgument("collision_backend", default_value="urdf_fcl"),
+        DeclareLaunchArgument("dh_parameters_file", default_value=""),
         DeclareLaunchArgument(
             "model", default_value="excavator.urdf.xacro",
             description="URDF xacro under excavator_description/urdf "
@@ -57,6 +59,8 @@ def generate_launch_description():
                 "max_collision_joint_step": 0.03,
                 "require_collision_check": True,
                 "allow_simulator_initialization": True,
+                "collision_backend": LaunchConfiguration("collision_backend"),
+                "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
             }],
         ),
     ])

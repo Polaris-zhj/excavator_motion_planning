@@ -1,0 +1,72 @@
+# Modified DH model of the 4-DOF excavator arm.
+#
+# A_i = Rx(alpha_prev) * Tx(a_prev) * Rz(theta + theta_offset) * Tz(d)
+#
+# The DH frames are located on the common normals of the joint axes, so they
+# differ from the CAD/URDF link frames. "links" maps a DH frame to the
+# corresponding physical link frame; URDF visualization/simulation keeps using
+# the physical frames while planning/IK use this DH model.
+convention: modified_dh
+
+# base_link -> DH frame 0 (same as the frame of the swing joint)
+base:
+  xyz: [0.0, 0.0, 1.7572]
+  # Identity orientation: swing DH X matches base_link X, Z points up.
+  rpy: [0.0, 0.0, 0.0]
+
+joints:
+  - name: swing_joint
+    link: swing_link
+    # Physical swing axis is -Z; the DH frame Z points up, so theta = -q.
+    theta_sign: -1.0
+    alpha_prev: 0.0
+    a_prev: 0.0
+    d: 0.0
+    theta_offset: 0.0
+    limits: [-6.2832, 6.2832]
+    velocity: 0.5
+
+  - name: boom_joint
+    link: boom_link
+    alpha_prev: -1.5707963267948966
+    a_prev: -0.009
+    d: 0.0
+    theta_offset: -0.30506418459896556
+    limits: [-0.9, 0.35]
+    velocity: 0.3
+
+  - name: stick_joint
+    link: stick_link
+    alpha_prev: 0.0
+    a_prev: 5.679956803532928
+    d: 0.0
+    theta_offset: 1.5258504802343817
+    limits: [-0.8, 1.0]
+    velocity: 0.4
+
+  - name: bucket_joint
+    link: bucket_link
+    alpha_prev: 0.0
+    a_prev: 2.9150120327195905
+    d: 0.0
+    theta_offset: 0.0
+    limits: [-1.4, 1.2]
+    velocity: 0.5
+
+# Fixed transform from each post-joint DH frame to the physical link frame.
+links:
+  swing_link:
+    xyz: [0.0, 0.0, -1.0372]
+    rpy: [0.0, 0.0, 0.0]
+  boom_link:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [1.5707963267948966, 0.0, 0.305064185]
+  stick_link:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [1.5707963267948966, 0.0, 0.051813704]
+  bucket_link:
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [1.5707963267948966, 0.0, 1.523513704]
+  bucket_tip:
+    xyz: [0.025144069, 1.800824193, 0.0]
+    rpy: [1.5707963267948966, 0.0, 1.523513704]

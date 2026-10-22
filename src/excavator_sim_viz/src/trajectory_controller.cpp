@@ -4,7 +4,7 @@
 #include <cmath>
 #include <utility>
 
-#include "excavator_planning/baseline_planners.hpp"
+#include "excavator_common/linear_trajectory_interpolator.hpp"
 
 namespace tramcar {
 namespace planning {

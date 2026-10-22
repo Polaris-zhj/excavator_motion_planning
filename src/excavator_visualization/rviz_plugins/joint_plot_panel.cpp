@@ -6,6 +6,8 @@
 #include <limits>
 #include <utility>
 
+#include <QComboBox>
+#include <QHBoxLayout>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -377,10 +379,25 @@ void JointPlotWidget::paintEvent(QPaintEvent*) {
     painter.drawText(legend_x + 23, legend_y, name);
     legend_x += 30 + painter.fontMetrics().horizontalAdvance(name);
   }
+  bool has_reference_curve = false;
+  bool has_measured_curve = false;
+  for (const PlotCurve& curve : curves_) {
+    has_reference_curve =
+        has_reference_curve || curve.reference.times.size() >= 2;
+    has_measured_curve =
+        has_measured_curve || curve.actual.times.size() >= 2;
+  }
+  QString line_legend;
+  if (has_reference_curve && has_measured_curve) {
+    line_legend = "solid=ref, dashed=measured";
+  } else if (has_reference_curve) {
+    line_legend = "solid=reference";
+  } else if (has_measured_curve) {
+    line_legend = "dashed=measured";
+  }
   painter.setPen(QColor(150, 150, 150));
   painter.drawText(QRect(rect().left(), 4, rect().width() - 8, 20),
-                   Qt::AlignRight | Qt::AlignTop,
-                   "solid=ref, dashed=measured");
+                   Qt::AlignRight | Qt::AlignTop, line_legend);
   painter.setPen(QColor(120, 120, 120));
   painter.drawText(QRect(rect().left(), 20, rect().width() - 8, 20),
                    Qt::AlignRight | Qt::AlignTop,
@@ -440,6 +457,14 @@ void JointPlotWidget::paintEvent(QPaintEvent*) {
 ExcavatorJointPlotPanel::ExcavatorJointPlotPanel(QWidget* parent)
     : rviz_common::Panel(parent) {
   auto* outer = new QVBoxLayout(this);
+  auto* line_row = new QHBoxLayout();
+  line_row->addWidget(new QLabel("Curves:", this));
+  line_mode_combo_ = new QComboBox(this);
+  line_mode_combo_->addItem("Both (ref + measured)", 0);
+  line_mode_combo_->addItem("Reference only (solid)", 1);
+  line_mode_combo_->addItem("Measured only (dashed)", 2);
+  line_row->addWidget(line_mode_combo_, 1);
+  outer->addLayout(line_row);
   position_plot_ = new JointPlotWidget(this);
   velocity_plot_ = new JointPlotWidget(this);
   acceleration_plot_ = new JointPlotWidget(this);
@@ -448,6 +473,8 @@ ExcavatorJointPlotPanel::ExcavatorJointPlotPanel(QWidget* parent)
   outer->addWidget(acceleration_plot_);
   info_label_ = new QLabel("waiting for a planned trajectory", this);
   outer->addWidget(info_label_);
+  connect(line_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, [this](int) { RefreshPlot(); });
   timer_ = new QTimer(this);
   connect(timer_, &QTimer::timeout, this, [this]() { RefreshPlot(); });
   timer_->start(100);
@@ -467,13 +494,13 @@ void ExcavatorJointPlotPanel::onInitialize() {
           });
   joint_state_subscription_ =
       node_->create_subscription<sensor_msgs::msg::JointState>(
-          "/joint_states", rclcpp::QoS(100),
+          "/joint_states", rclcpp::QoS(1),
           [this](sensor_msgs::msg::JointState::ConstSharedPtr message) {
             HandleJointState(*message);
           });
   status_subscription_ =
       node_->create_subscription<excavator_interfaces::msg::ExecutionStatus>(
-          "/excavator/execution_status", 10,
+          "/excavator/execution_status", rclcpp::QoS(1),
           [this](excavator_interfaces::msg::ExecutionStatus::ConstSharedPtr
                      message) { HandleExecutionStatus(*message); });
 }
@@ -487,6 +514,7 @@ void ExcavatorJointPlotPanel::HandleTrajectory(
   joint_names_ = trajectory.joint_names;
   offline_started_ = false;
   offline_start_stamp_ = 0.0;
+  aligner_.Reset();
   reset_view_pending_ = true;
   last_status_ = "reference loaded: " +
                  std::to_string(trajectory.points.size()) + " points";
@@ -511,8 +539,15 @@ void ExcavatorJointPlotPanel::HandleJointState(
       offline_started_ = true;
     }
     sample_time = stamp - offline_start_stamp_;
-    if (sample_time < 0.0 ||
-        sample_time > plot_data_.Duration() + 0.1) {
+    if (sample_time < -1.0e-6) {
+      // The replay loop wrapped without an execution-status publisher.
+      // Treat it as a fresh run instead of dropping every sample whose
+      // timestamp is older than the first loop.
+      offline_start_stamp_ = stamp;
+      sample_time = 0.0;
+      aligner_.Reset();
+      plot_data_.ClearActual();
+    } else if (sample_time > plot_data_.Duration() + 0.1) {
       return;
     }
   } else if (!execution_running_) {
@@ -552,30 +587,65 @@ void ExcavatorJointPlotPanel::HandleJointState(
     state.positions.push_back(message.position[index]);
     state.velocities.push_back(message.velocity[index]);
   }
+
+  // A new run may begin while the arm is still at the previous endpoint.
+  // Do not plot those states as if they were part of the new reference: wait
+  // until the measured joints reach the trajectory start, anchor that instant
+  // to t=0, and start a fresh curve when a teleport or clock restart is seen.
+  const tramcar::planning::JointTrajectory reference =
+      plot_data_.GetReference();
+  if (reference.points.empty() ||
+      reference.points.front().positions.size() != state.positions.size()) {
+    return;
+  }
+  const tramcar::planning::visualization::MeasuredSampleAlignment alignment =
+      aligner_.Update(sample_time, reference.points.front().positions,
+                      state.positions);
+  if (alignment.restarted) {
+    plot_data_.ClearActual();
+  }
+  if (!alignment.accept) {
+    return;
+  }
+  sample_time = alignment.time;
+  if (sample_time < -1.0e-6 ||
+      sample_time > plot_data_.Duration() + 0.15) {
+    return;
+  }
   plot_data_.AddActual(sample_time, state);
 }
 
 void ExcavatorJointPlotPanel::HandleExecutionStatus(
     const excavator_interfaces::msg::ExecutionStatus& message) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (!has_execution_status_) {
-    // Drop any fallback samples that were anchored to an arbitrary first
-    // stamp before the true trajectory clock became available.
+  const bool new_running =
+      message.state == excavator_interfaces::msg::ExecutionStatus::RUNNING;
+  // Resuming from PAUSED continues the same measured curve. A transition from
+  // any other state into RUNNING is a new execution, even if its clock happens
+  // to start at a value that is not lower than the previous status.
+  const bool was_running_or_paused =
+      last_execution_state_ ==
+          excavator_interfaces::msg::ExecutionStatus::RUNNING ||
+      last_execution_state_ ==
+          excavator_interfaces::msg::ExecutionStatus::PAUSED;
+  const bool fresh_execution = new_running && !was_running_or_paused;
+  const bool clock_restarted =
+      message.elapsed_time + 0.2 < execution_elapsed_;
+
+  if (!has_execution_status_ || fresh_execution || clock_restarted) {
+    // Drop samples anchored to the previous run. They would otherwise be
+    // connected to the new run and appear as a jump in the measured curve.
     if (plot_data_.ActualSampleCount() > 0) {
       plot_data_.ClearActual();
     }
+    aligner_.Reset();
     has_execution_status_ = true;
-  } else if (message.elapsed_time + 0.2 < execution_elapsed_) {
-    // The clock jumped backwards: a new execution started or an offline
-    // replay loop wrapped. Start a fresh measured curve instead of mixing
-    // two runs (AddActual would otherwise reject all new samples).
-    plot_data_.ClearActual();
   }
-  execution_running_ =
-      message.state == excavator_interfaces::msg::ExecutionStatus::RUNNING;
+  execution_running_ = new_running;
   execution_elapsed_ = message.elapsed_time;
   status_receipt_time_ = std::chrono::steady_clock::now();
   status_stamp_seconds_ = ToSeconds(message.header.stamp);
+  last_execution_state_ = message.state;
   last_status_ = message.message;
 }
 
@@ -601,6 +671,9 @@ void ExcavatorJointPlotPanel::RefreshPlot() {
   const std::size_t actual_samples = plot_data_.ActualSampleCount();
   const QColor fallback(160, 160, 160);
 
+  const int line_mode = line_mode_combo_
+                            ? line_mode_combo_->currentData().toInt()
+                            : 0;
   const auto build_curves = [&](PlotQuantity quantity) {
     std::vector<PlotCurve> curves;
     curves.reserve(names.size());
@@ -610,10 +683,14 @@ void ExcavatorJointPlotPanel::RefreshPlot() {
       curve.color = joint < JointColors().size()
                         ? JointColors()[joint]
                         : fallback;
-      curve.reference =
-          plot_data_.ReferenceSeries(joint, quantity, 400);
-      curve.actual = plot_data_.ActualSeries(joint, quantity);
-      if (!curve.actual.times.empty()) {
+      if (line_mode != 2) {
+        curve.reference =
+            plot_data_.ReferenceSeries(joint, quantity, 400);
+      }
+      if (line_mode != 1) {
+        curve.actual = plot_data_.ActualSeries(joint, quantity);
+      }
+      if (line_mode == 0 && !curve.actual.times.empty()) {
         curve.reference = plot_data_.AlignedReferenceSeries(
             curve.actual, joint, quantity);
       }

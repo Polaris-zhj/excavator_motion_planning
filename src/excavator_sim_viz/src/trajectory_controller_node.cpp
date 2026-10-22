@@ -13,6 +13,7 @@
 #include "excavator_common/joint_trajectory.hpp"
 #include "excavator_common/robot_state.hpp"
 #include "excavator_interfaces/action/execute_trajectory.hpp"
+#include "excavator_collision/collision_checker_factory.hpp"
 #include "excavator_interfaces/msg/execution_status.hpp"
 #include "excavator_interfaces/msg/planning_scene.hpp"
 #include "excavator_interfaces/msg/trajectory_update.hpp"
@@ -134,6 +135,10 @@ class TrajectoryControllerNode final : public rclcpp::Node {
          -0.08259, 0.11620, -0.40, -0.40, -0.40});
     const std::string robot_description =
         declare_parameter<std::string>("robot_description", "");
+    const std::string collision_backend =
+        declare_parameter<std::string>("collision_backend", "urdf_fcl");
+    const std::string dh_parameters_file =
+        declare_parameter<std::string>("dh_parameters_file", "");
 
     if (!std::isfinite(control_rate_hz) || control_rate_hz <= 0.0) {
       throw std::invalid_argument(
@@ -160,12 +165,33 @@ class TrajectoryControllerNode final : public rclcpp::Node {
       } else {
         position_limits = kinematics_.GetPositionLimits();
         max_velocity = kinematics_.GetVelocityLimits();
-        const ValidationResult collision_initialized =
-            collision_checker_.Initialize(robot_description, joint_names_);
-        if (!collision_initialized.ok) {
-          RCLCPP_ERROR(get_logger(), "Failed to initialize collision checker: %s",
-                       collision_initialized.message.c_str());
+        collision_checker_ = tramcar::planning::CollisionCheckerFactory::
+            Instance().Create(collision_backend);
+        if (!collision_checker_) {
+          std::string available;
+          for (const std::string& type : tramcar::planning::
+                   CollisionCheckerFactory::Instance().AvailableTypes()) {
+            available += " " + type;
+          }
+          RCLCPP_ERROR(get_logger(),
+                       "Unknown collision backend '%s'; available:%s",
+                       collision_backend.c_str(), available.c_str());
         } else {
+          tramcar::planning::CollisionModelConfig collision_config;
+          collision_config.joint_names = joint_names_;
+          collision_config.model_format =
+              collision_backend == "dh_fcl" ? "dh" : "urdf";
+          collision_config.model_source =
+              collision_config.model_format == "urdf"
+                  ? robot_description
+                  : dh_parameters_file;
+          const ValidationResult collision_initialized =
+              collision_checker_->Initialize(collision_config);
+          if (!collision_initialized.ok) {
+            RCLCPP_ERROR(get_logger(),
+                         "Failed to initialize collision checker: %s",
+                         collision_initialized.message.c_str());
+          } else {
           std::vector<std::pair<std::string, std::string>> allowed_pairs;
           for (const std::string& entry : allowed_collision_pairs) {
             const std::size_t separator = entry.find(':');
@@ -179,8 +205,9 @@ class TrajectoryControllerNode final : public rclcpp::Node {
             allowed_pairs.emplace_back(entry.substr(0, separator),
                                        entry.substr(separator + 1));
           }
-          collision_checker_.SetAllowedCollisionPairs(allowed_pairs);
+          collision_checker_->SetAllowedCollisionPairs(allowed_pairs);
           collision_ready_ = true;
+          }
         }
       }
     }
@@ -377,7 +404,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
           scene.header.frame_id.clear();
         }
       }
-      const auto collision = collision_checker_.CheckTrajectory(
+      const auto collision = collision_checker_->CheckTrajectory(
           trajectory, scene, max_collision_joint_step_);
       if (!collision.valid || collision.collision) {
         RCLCPP_WARN(get_logger(), "Trajectory update rejected by collision "
@@ -510,7 +537,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
           scene.header.frame_id.clear();
         }
       }
-      const auto collision = collision_checker_.CheckTrajectory(
+      const auto collision = collision_checker_->CheckTrajectory(
           trajectory, scene, max_collision_joint_step_);
       if (!collision.valid || collision.collision) {
         failure = "final trajectory collision validation failed: " +
@@ -694,7 +721,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
   std::vector<std::string> joint_names_;
   std::vector<double> initial_positions_;
   tramcar::planning::UrdfKinematicsModel kinematics_;
-  tramcar::planning::UrdfFclCollisionChecker collision_checker_;
+  std::unique_ptr<tramcar::planning::CollisionChecker> collision_checker_;
   std::unique_ptr<TrajectoryController> controller_;
   std::unique_ptr<KinematicSimulator> simulator_;
   bool collision_ready_{false};
