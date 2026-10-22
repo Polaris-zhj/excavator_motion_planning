@@ -241,6 +241,8 @@ src/excavator_description/config/excavator_dh.yaml
 - DH frame 到物理 URDF link frame 的固定偏移；
 - `bucket_tip` 工具变换。
 
+最后一个 DH frame（`bucket_joint`）的 X 轴沿铲斗连杆轴线指向工具，`bucket_tip` 在该 frame 中为纯 X 方向平移 `[1.800999722, 0, 0]`。`bucket_joint.theta_offset` 与 `bucket_link`/`bucket_tip` 的固定偏移做了等角补偿，因此物理连杆位姿、URDF FK 和 DH FK 仍保持完全一致；变化的只是 DH frame 的轴向定义。`publish_dh_frames.py` 显示的 `bucket_joint`/`bucket_tip` 坐标轴会与上述约定一致。
+
 `DhKinematicsModel` 实现与 URDF 后端相同的 `KinematicsModel` 接口，并支持 FK、Jacobian、IK 和限位。当前 DH FK 与 URDF FK 已通过随机关节角的数值等价测试。
 
 启动 DH 规划后端（可视化/仿真仍使用 URDF 模型）：

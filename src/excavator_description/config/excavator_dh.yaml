@@ -49,7 +49,10 @@ joints:
     alpha_prev: 0.0
     a_prev: 2.9150120327195905
     d: 0.0
-    theta_offset: 0.0
+    # Rotate the last DH frame so its X axis points from the bucket pivot
+    # towards the tool. The bucket-link offset below is compensated by the
+    # same angle, so all physical link poses are unchanged.
+    theta_offset: 1.5568347000443932
     limits: [-1.4, 1.2]
     velocity: 0.5
 
@@ -66,7 +69,11 @@ links:
     rpy: [1.5707963267948966, 0.0, 0.051813704]
   bucket_link:
     xyz: [0.0, 0.0, 0.0]
-    rpy: [1.5707963267948966, 0.0, 1.523513704]
+    # 1.523513704 - 1.5568347000443932: keep the physical bucket pose while
+    # frame 4 X points along the bucket-link axis.
+    rpy: [1.5707963267948966, 0.0, -0.0333209960443932]
   bucket_tip:
-    xyz: [0.025144069, 1.800824193, 0.0]
-    rpy: [1.5707963267948966, 0.0, 1.523513704]
+    # Pure X translation from the bucket joint in the last DH frame. The
+    # orientation keeps the physical bucket-tip pose unchanged.
+    xyz: [1.80099972190447, 0.0, 0.0]
+    rpy: [1.5707963267948966, 0.0, -0.0333209960443932]

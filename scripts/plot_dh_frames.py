@@ -119,8 +119,8 @@ def main():
         "swing_joint": (-1.00, -0.75, 0.35),
         "boom_joint": (0.65, 0.65, 0.30),
         "stick_joint": (-0.30, 0.40, 0.30),
-        "bucket_joint": (-0.70, 0.30, 0.30),
-        "bucket_tip": (0.65, 0.0, 0.30),
+        "bucket_joint": (-0.90, 0.45, 0.85),
+        "bucket_tip": (0.30, -0.10, -0.40),
     }
     table_rows = []
     for name, matrix, label in frames:
