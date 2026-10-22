@@ -68,7 +68,7 @@ def generate_launch_description():
                 "joint_names": [
                     "swing_joint", "boom_joint", "stick_joint", "bucket_joint"
                 ],
-                "initial_positions": [0.0, -0.35, 0.45, -0.4],
+                "initial_positions": [0.0, -0.35, 0.8, -0.3],
                 "control_rate_hz": 100.0,
                 "max_collision_joint_step": 0.03,
                 "require_collision_check": True,

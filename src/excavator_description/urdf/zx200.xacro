@@ -6,6 +6,13 @@
 	<!-- Import Rviz colors -->
 	<!-- <xacro:include filename="$(find zx200_description)/urdf/materials.xacro" /> -->
 
+	<!-- RViz and the rest of the project use world as the fixed frame. -->
+	<link name="world"/>
+	<joint name="world_to_base_link" type="fixed">
+		<parent link="world"/>
+		<child link="base_link"/>
+	</joint>
+
 	<!-- Used for fixing robot to Gazebo 'base_link' -->
 	<link name="base_link"/>
 
@@ -18,13 +25,13 @@
 	<link name="track_link">
 		<visual>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-crawler.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-crawler.dae"/>
 			</geometry>
 		</visual>
 
 		<collision>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-crawler.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-crawler-collision.stl"/>
 			</geometry>
 		</collision>
 
@@ -38,25 +45,27 @@
 	</link>
 
 	<!-- body axis -->
-	<joint name="swing_joint" type="continuous">
+	<joint name="swing_joint" type="revolute">
 		<origin xyz="0.10787 -0.034301 1.1206"/>
 		<axis xyz="0 0 1"/>
 		<parent link="track_link"/>
-		<child link="body_link"/>
+		<child link="swing_link"/>
+		<limit lower="-6.2832" upper="6.2832"
+			   effort="5000" velocity="6.159937255"/>
 	</joint>
 
-	<link name="body_link">
+	<link name="swing_link">
 		<visual>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-body.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-body.dae"/>
 			</geometry>
 		</visual>
 
 		<collision>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-body.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-body-collision.stl"/>
 			</geometry>
 		</collision>
 
@@ -74,7 +83,7 @@
 		<origin rpy="0 ${radians(32.0357)} 0"
 				xyz="0.05467 -0.040187 0.72492"/>
 		<axis xyz="0 1 0"/>
-		<parent link="body_link"/>
+		<parent link="swing_link"/>
 		<child link="boom_link"/>
 		<limit lower="-1.137"
 			   upper="1.0"
@@ -86,14 +95,14 @@
 		<visual>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-boom.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-boom.dae"/>
 			</geometry>
 		</visual>
 
 		<collision>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-boom.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-boom-collision.stl"/>
 			</geometry>
 		</collision>
 
@@ -106,30 +115,30 @@
 		</inertial>
 	</link>
 
-	<joint name="arm_joint" type="revolute">
+	<joint name="stick_joint" type="revolute">
 		<origin rpy="0 ${radians(16.9707)} 0"
 				xyz="4.83998 0.010957 3.00227"/>
 		<axis xyz="0 1 0"/>
 		<parent link="boom_link"/>
-		<child link="arm_link"/>
+		<child link="stick_link"/>
 		<limit lower="0.594"
 			   upper="2.687"
 			   effort="500"
 			   velocity="6.159937255"/>
 	</joint>
 
-	<link name="arm_link">
+	<link name="stick_link">
 		<visual>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-arm.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-arm.dae"/>
 			</geometry>
 		</visual>
 
 		<collision>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-arm.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-arm-collision.stl"/>
 			</geometry>
 		</collision>
 
@@ -147,7 +156,7 @@
 		<origin rpy="0 ${radians(-9.20083)} 0"
 				xyz="1.91546 -0.023546 2.17374"/>
 		<axis xyz="0 1 0"/>
-		<parent link="arm_link"/>
+		<parent link="stick_link"/>
 		<child link="bucket_link"/>
 		<limit lower="-0.622"
 			   upper="2.372"
@@ -159,14 +168,14 @@
 		<visual>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-bucket.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-bucket.dae"/>
 			</geometry>
 		</visual>
 
 		<collision>
 			<origin xyz="0 0 0"/>
 			<geometry>
-				<mesh filename="package://zx200_description/meshes/zx200-bucket.dae"/>
+				<mesh filename="package://excavator_description/meshes/zx200-bucket-collision.stl"/>
 			</geometry>
 		</collision>
 
@@ -179,7 +188,7 @@
 		</inertial>
 	</link>
 
-	<link name="bucket_end_link">
+	<link name="bucket_tip">
 		<visual>
 			<origin xyz="0 0 0" rpy="0 0 0"/>
 			<geometry>
@@ -196,16 +205,10 @@
 		</inertial>
 	</link>
 
-	<joint name="bucket_end_joint" type="revolute">
+	<joint name="bucket_tip_joint" type="fixed">
 		<parent link="bucket_link"/>
-		<child link="bucket_end_link"/>
-		<axis xyz="1 0 0"/>
-		<origin rpy="0 0 0"
-				xyz="1.13012 0 0.93856"/>
-		<limit effort="1"
-			   lower="-3.14"
-			   upper="3.14"
-			   velocity="0.5"/>
+		<child link="bucket_tip"/>
+		<origin xyz="1.13012 0 0.93856" rpy="0 0 0"/>
 	</joint>
 
 	<transmission name="tran1">
@@ -240,7 +243,7 @@
 
 	<transmission name="tran3">
 		<type>transmission_interface/SimpleTransmission</type>
-		<joint name="arm_joint">
+		<joint name="stick_joint">
 			<hardwareInterface>
 				hardware_interface/EffortJointInterface
 			</hardwareInterface>

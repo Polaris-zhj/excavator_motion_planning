@@ -87,7 +87,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
             "joint_names",
             {"swing_joint", "boom_joint", "stick_joint", "bucket_joint"})),
         initial_positions_(declare_parameter<std::vector<double>>(
-            "initial_positions", {0.0, -0.35, 0.45, -0.4})),
+            "initial_positions", {0.0, -0.35, 0.8, -0.3})),
         kinematics_(joint_names_) {
     const double control_rate_hz =
         declare_parameter<double>("control_rate_hz", 100.0);
