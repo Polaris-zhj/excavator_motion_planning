@@ -165,6 +165,12 @@ TEST(UrdfFclCollisionCheckerTest, SamplesInteriorPathStates) {
   EXPECT_TRUE(result.valid) << result.message;
   EXPECT_TRUE(result.collision);
   EXPECT_GT(result.checked_states, 1.0);
+
+  const CollisionCheckResult obstacle_result =
+      checker.CheckPathCollisionWithObstacle(
+          path, scene, "swept_obstacle", 0.05);
+  EXPECT_TRUE(obstacle_result.valid) << obstacle_result.message;
+  EXPECT_TRUE(obstacle_result.collision);
 }
 
 TEST(UrdfFclCollisionCheckerTest, SupportsInjectedKinematicsModel) {
