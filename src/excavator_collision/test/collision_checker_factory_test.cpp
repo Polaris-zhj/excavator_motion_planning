@@ -15,12 +15,26 @@ namespace {
 
 class MockCollisionChecker final : public CollisionChecker {
  public:
-  ValidationResult Initialize(const CollisionModelConfig&) override {
+  ValidationResult Initialize(const CollisionModelConfig&,
+                               const KinematicsModel*) override {
     return {true, ""};
   }
   void SetAllowedCollisionPairs(
       const std::vector<std::pair<std::string, std::string>>&) override {}
   CollisionCheckResult CheckState(
+      const JointPositions&,
+      const excavator_interfaces::msg::PlanningScene&) const override {
+    CollisionCheckResult result;
+    result.valid = true;
+    return result;
+  }
+  CollisionCheckResult CheckSelfCollision(
+      const JointPositions&) const override {
+    CollisionCheckResult result;
+    result.valid = true;
+    return result;
+  }
+  CollisionCheckResult CheckEnvironmentCollision(
       const JointPositions&,
       const excavator_interfaces::msg::PlanningScene&) const override {
     CollisionCheckResult result;
@@ -35,12 +49,29 @@ class MockCollisionChecker final : public CollisionChecker {
     result.valid = true;
     return result;
   }
+  CollisionCheckResult CheckPathCollisionWithObstacle(
+      const JointPath&,
+      const excavator_interfaces::msg::PlanningScene&,
+      const std::string&, double) const override {
+    CollisionCheckResult result;
+    result.valid = true;
+    return result;
+  }
   CollisionCheckResult CheckTrajectory(
       const JointTrajectory&,
       const excavator_interfaces::msg::PlanningScene&,
       double) const override {
     CollisionCheckResult result;
     result.valid = true;
+    return result;
+  }
+  CollisionDistanceResult ComputeDistanceToObstacle(
+      const JointPositions&,
+      const excavator_interfaces::msg::PlanningScene&,
+      const std::string&) const override {
+    CollisionDistanceResult result;
+    result.valid = true;
+    result.distance = 0.0;
     return result;
   }
 };
