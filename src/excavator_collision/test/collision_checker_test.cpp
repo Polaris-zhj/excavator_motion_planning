@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "shape_msgs/msg/solid_primitive.hpp"
+#include "kinematics/urdf_kinematics_model.hpp"
 
 namespace tramcar {
 namespace planning {
@@ -164,6 +165,67 @@ TEST(UrdfFclCollisionCheckerTest, SamplesInteriorPathStates) {
   EXPECT_TRUE(result.valid) << result.message;
   EXPECT_TRUE(result.collision);
   EXPECT_GT(result.checked_states, 1.0);
+}
+
+TEST(UrdfFclCollisionCheckerTest, SupportsInjectedKinematicsModel) {
+  UrdfKinematicsModel kinematics({"arm_joint"});
+  const auto kinematics_result = kinematics.InitializeFromString(kRobotUrdf);
+  ASSERT_TRUE(kinematics_result.ok) << kinematics_result.message;
+
+  CollisionModelConfig config;
+  config.joint_names = {"arm_joint"};
+  config.model_source = kRobotUrdf;
+  config.model_format = "urdf";
+
+  UrdfFclCollisionChecker checker;
+  const auto initialized = checker.Initialize(config, &kinematics);
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  const CollisionCheckResult result = checker.CheckState({0.0}, scene);
+  EXPECT_TRUE(result.valid) << result.message;
+  EXPECT_FALSE(result.collision);
+}
+
+TEST(UrdfFclCollisionCheckerTest, SupportsScopedStateAndDistanceQueries) {
+  UrdfFclCollisionChecker checker;
+  const auto initialized = checker.Initialize(kRobotUrdf, {"arm_joint"});
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  const CollisionCheckResult self_result = checker.CheckSelfCollision({0.0});
+  ASSERT_TRUE(self_result.valid) << self_result.message;
+  EXPECT_FALSE(self_result.collision);
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  scene.objects.push_back(
+      MakeSphere("distance_obstacle", 10.0, 10.0, 10.0, 0.1));
+
+  const CollisionCheckResult environment_result =
+      checker.CheckEnvironmentCollision({0.0}, scene);
+  ASSERT_TRUE(environment_result.valid) << environment_result.message;
+  EXPECT_FALSE(environment_result.collision);
+
+  const CollisionDistanceResult distance =
+      checker.ComputeDistanceToObstacle({0.0}, scene, "distance_obstacle");
+  ASSERT_TRUE(distance.valid) << distance.message;
+  EXPECT_GT(distance.distance, 0.0);
+  EXPECT_EQ(distance.obstacle_id, "distance_obstacle");
+  EXPECT_FALSE(distance.robot_link.empty());
+}
+
+TEST(UrdfFclCollisionCheckerTest, RejectsUnknownDistanceObstacle) {
+  UrdfFclCollisionChecker checker;
+  const auto initialized = checker.Initialize(kRobotUrdf, {"arm_joint"});
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  const CollisionDistanceResult distance =
+      checker.ComputeDistanceToObstacle({0.0}, scene, "missing_obstacle");
+  EXPECT_FALSE(distance.valid);
+  EXPECT_NE(distance.message.find("not found"), std::string::npos);
 }
 
 }  // namespace
