@@ -1,7 +1,7 @@
 # Collision Detection Module
 
 本目录是 `excavator_collision` 软件包内的碰撞检测实现层。完整架构和设计说明见
-[《挖机碰撞检测方案》](../../../../docs/collision_detection_design.md)。
+[《挖机碰撞检测方案》](../../../docs/collision_detection_design.md)。
 
 ## 目录职责
 
