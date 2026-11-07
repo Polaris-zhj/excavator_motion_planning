@@ -240,6 +240,11 @@ ros2 launch excavator_planning planning_server.launch.py \
 
 ### 改进 DH 运动学与可替换碰撞后端
 
+碰撞检测架构、数据模型、FCL 适配、接口定义、路径采样、场景输入约定和后端替换流程见
+[《挖机碰撞检测方案》](docs/collision_detection_design.md)。模块内部实现边界见
+[`excavator_collision/collision_detection/README.md`](src/excavator_collision/collision_detection/README.md)。
+
+
 规划计算层支持改进 DH（Modified DH / Craig）：
 
 ```text
@@ -279,17 +284,26 @@ kinematics_backend: urdf
 collision_backend: urdf_fcl
 ```
 
-碰撞检测已抽取 `CollisionChecker` 基类和 `CollisionCheckerFactory`：
+碰撞检测已抽取项目级 `CollisionChecker` 接口和 `CollisionCheckerFactory`：
 
-- 规划服务与控制器只依赖基类；
-- 当前注册后端为 `urdf_fcl`；
-- 第四阶段新增 `DhFclCollisionChecker` 并注册 `dh_fcl` 后，只需切换：
+- 当前工厂已注册的碰撞后端只有 `urdf_fcl`；
+- URDF 或 Modified-DH 运动学均通过 `KinematicsModel` 注入碰撞检查器；
+- 机器人碰撞几何仍从 URDF 加载，`RobotCollisionModel` 与 `KinematicsModel` 相互独立；
+- FCL 专属类型和计算逻辑集中在 `collision_detection/third_library/fcl`；
+- 当前支持单状态、路径、轨迹、自碰撞、环境碰撞和指定障碍物距离查询；路径检测采用离散采样，不保证连续碰撞自由。
+
+当前使用方式：
 
 ```bash
-collision_backend:=dh_fcl
+ros2 launch excavator_sim_viz demo.launch.py \
+  kinematics_backend:=dh \
+  collision_backend:=urdf_fcl \
+  model:=excavator.urdf.xacro
 ```
 
-规划和控制器主逻辑不需要修改。默认 `urdf` / `urdf_fcl` 路径仍然完全保留。
+后续新增自研碰撞算法时，实现 `CollisionChecker`、在工厂注册新类型，并修改
+`collision_backend` 配置即可；只有完成实现和注册的后端才能被选择。当前并未实现
+`dh_fcl` 独立碰撞后端，因为 DH 是运动学参数化方式，不是另一种碰撞算法。
 
 #### DH 坐标系视图
 
