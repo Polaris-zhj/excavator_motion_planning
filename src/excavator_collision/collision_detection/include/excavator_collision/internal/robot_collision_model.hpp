@@ -49,14 +49,21 @@ class RobotCollisionModel {
  public:
   ValidationResult InitializeFromUrdf(
       const std::string& urdf_xml,
-      const std::vector<std::string>& planning_joint_names);
+      const std::vector<std::string>& planning_joint_names,
+      const std::string& reference_frame = "base_link");
 
   const std::string& root_frame() const { return root_frame_; }
+  const std::string& reference_frame() const { return reference_frame_; }
+  const Eigen::Isometry3d& root_to_reference_frame() const {
+    return root_to_reference_frame_;
+  }
   const std::vector<std::string>& joint_names() const { return joint_names_; }
   const std::vector<LinkCollisionGeometry>& links() const { return links_; }
 
  private:
   std::string root_frame_;
+  std::string reference_frame_;
+  Eigen::Isometry3d root_to_reference_frame_{Eigen::Isometry3d::Identity()};
   std::vector<std::string> joint_names_;
   std::vector<LinkCollisionGeometry> links_;
 };
