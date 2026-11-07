@@ -281,8 +281,9 @@ ValidationResult RobotCollisionModel::InitializeFromUrdf(
     current = model.getLink(joint->parent_link_name);
   }
   if (!current) {
-    return {false, "kinematics reference frame is not connected to URDF root: " +
-                       reference_frame};
+    return {false,
+            "kinematics reference frame is not connected to URDF root: " +
+                reference_frame};
   }
 
   Eigen::Isometry3d root_to_reference =
