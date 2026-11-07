@@ -19,20 +19,32 @@ find_package(excavator_common REQUIRED)
 find_package(excavator_interfaces REQUIRED)
 
 add_library(excavator_collision
-  src/collision_checker.cpp
+  collision_detection/src/collision_checker.cpp
+  collision_detection/src/robot_collision_model.cpp
+  collision_detection/third_library/fcl/fcl_collision_model.cpp
   src/collision_checker_factory.cpp)
-target_include_directories(excavator_collision PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-target_link_libraries(excavator_collision fcl Eigen3::Eigen)
+
+target_include_directories(excavator_collision
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/collision_detection/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/collision_detection/third_library/fcl)
+
+target_link_libraries(excavator_collision
+  PRIVATE fcl Eigen3::Eigen)
+
 ament_target_dependencies(excavator_collision
-  ament_index_cpp urdf geometry_msgs shape_msgs excavator_common excavator_interfaces
-)
-target_compile_options(excavator_collision PRIVATE -Wall -Wextra -Wpedantic)
+  ament_index_cpp urdf geometry_msgs shape_msgs excavator_common
+  excavator_interfaces)
+
+target_compile_options(excavator_collision PRIVATE
+  -Wall -Wextra -Wpedantic)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+
   ament_add_gtest(collision_checker_test test/collision_checker_test.cpp)
   target_compile_definitions(collision_checker_test PRIVATE
     TEST_MESH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/tetrahedron.stl")
@@ -52,11 +64,11 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS excavator_collision EXPORT excavator_collisionTargets
-  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin
-)
+  ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
+
 ament_export_targets(excavator_collisionTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
-ament_export_dependencies(ament_index_cpp Eigen3 fcl urdf geometry_msgs shape_msgs excavator_common
-  excavator_interfaces)
+ament_export_dependencies(ament_index_cpp Eigen3 fcl urdf geometry_msgs
+  shape_msgs excavator_common excavator_interfaces)
 ament_package()
