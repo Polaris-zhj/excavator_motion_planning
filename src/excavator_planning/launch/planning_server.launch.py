@@ -51,7 +51,7 @@ def generate_launch_description():
             description="Kinematics backend: urdf or dh"),
         DeclareLaunchArgument(
             "collision_backend", default_value="urdf_fcl",
-            description="Collision backend type (urdf_fcl; dh_fcl in phase 4)"),
+            description="Collision backend type (currently urdf_fcl)"),
         DeclareLaunchArgument(
             "dh_parameters_file", default_value=dh_parameters_default,
             description="Modified-DH parameter file used by the dh backend"),
