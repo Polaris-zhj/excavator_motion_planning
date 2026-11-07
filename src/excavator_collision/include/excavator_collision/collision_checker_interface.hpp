@@ -1,12 +1,14 @@
 #ifndef EXCAVATOR_COLLISION__COLLISION_CHECKER_INTERFACE_HPP_
 #define EXCAVATOR_COLLISION__COLLISION_CHECKER_INTERFACE_HPP_
 
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "excavator_common/joint_trajectory.hpp"
 #include "excavator_interfaces/msg/planning_scene.hpp"
+#include "kinematics/kinematics_interface.hpp"
 
 namespace tramcar {
 namespace planning {
@@ -17,36 +19,44 @@ struct CollisionCheckResult {
   std::string message;
   std::string first_link;
   std::string second_object;
-  // Joint state at which the first collision was detected. Empty when no
-  // collision was found. Allows RViz collision highlight markers.
   JointPositions collision_positions;
   double checked_states{0.0};
 };
 
-// Backend-independent collision model description.
-//
-// urdf_fcl:
-//   model_format = "urdf", model_source = URDF XML string
-// dh_fcl (future):
-//   model_format = "dh", model_source = path to the DH parameter file
+struct CollisionDistanceResult {
+  bool valid{false};
+  double distance{std::numeric_limits<double>::infinity()};
+  std::string robot_link;
+  std::string obstacle_id;
+  JointPositions joint_positions;
+  std::string message;
+};
+
+// Backend-independent collision model description. The source currently
+// contains URDF XML and is parsed into RobotCollisionModel; it never contains
+// FCL types.
 struct CollisionModelConfig {
   std::vector<std::string> joint_names;
   std::string model_source;
   std::string model_format{"urdf"};
 };
 
-// Abstract collision checker. Planning and control depend only on this
-// interface, so a new collision algorithm can be selected by type without
-// changing the planning or controller logic.
+// Planning and application code depends on this interface, not a concrete
+// collision backend. The kinematics model is borrowed and must outlive this
+// checker. Passing nullptr requests the URDF kinematics fallback for direct
+// use and tests; normal application wiring should pass its configured model.
 class CollisionChecker {
  public:
   virtual ~CollisionChecker() = default;
 
   virtual ValidationResult Initialize(
-      const CollisionModelConfig& config) = 0;
+      const CollisionModelConfig& config,
+      const KinematicsModel* kinematics_model) = 0;
 
-  // Additional link pairs excluded from self-collision checking (on top of
-  // direct parent-child pairs). Order of names in a pair does not matter.
+  virtual ValidationResult Initialize(const CollisionModelConfig& config) {
+    return Initialize(config, nullptr);
+  }
+
   virtual void SetAllowedCollisionPairs(
       const std::vector<std::pair<std::string, std::string>>& pairs) = 0;
 
@@ -54,15 +64,34 @@ class CollisionChecker {
       const JointPositions& positions,
       const excavator_interfaces::msg::PlanningScene& scene) const = 0;
 
+  virtual CollisionCheckResult CheckSelfCollision(
+      const JointPositions& positions) const = 0;
+
+  virtual CollisionCheckResult CheckEnvironmentCollision(
+      const JointPositions& positions,
+      const excavator_interfaces::msg::PlanningScene& scene) const = 0;
+
+  // Discrete joint-space path sampling. This does not prove continuous
+  // collision freedom between samples.
   virtual CollisionCheckResult CheckPath(
       const JointPath& path,
       const excavator_interfaces::msg::PlanningScene& scene,
       double max_joint_step) const = 0;
 
+  virtual CollisionCheckResult CheckPathCollisionWithObstacle(
+      const JointPath& path,
+      const excavator_interfaces::msg::PlanningScene& scene,
+      const std::string& obstacle_id, double max_joint_step) const = 0;
+
   virtual CollisionCheckResult CheckTrajectory(
       const JointTrajectory& trajectory,
       const excavator_interfaces::msg::PlanningScene& scene,
       double max_joint_step) const = 0;
+
+  virtual CollisionDistanceResult ComputeDistanceToObstacle(
+      const JointPositions& positions,
+      const excavator_interfaces::msg::PlanningScene& scene,
+      const std::string& obstacle_id) const = 0;
 };
 
 }  // namespace planning
