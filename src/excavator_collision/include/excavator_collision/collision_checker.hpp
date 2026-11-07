@@ -7,13 +7,12 @@
 #include <vector>
 
 #include "excavator_collision/collision_checker_interface.hpp"
-#include "excavator_common/joint_trajectory.hpp"
 
 namespace tramcar {
 namespace planning {
 
-// URDF collision geometry checker backed by FCL. Unsupported or malformed
-// geometry fails closed: it is never silently omitted from collision checks.
+// URDF collision geometry with FCL queries. FCL types are hidden behind the
+// private adapter boundary. FK is supplied by the selected KinematicsModel.
 class UrdfFclCollisionChecker final : public CollisionChecker {
  public:
   UrdfFclCollisionChecker();
@@ -22,19 +21,28 @@ class UrdfFclCollisionChecker final : public CollisionChecker {
   UrdfFclCollisionChecker(const UrdfFclCollisionChecker&) = delete;
   UrdfFclCollisionChecker& operator=(const UrdfFclCollisionChecker&) = delete;
 
-  // Existing convenience overload, kept for tests and direct users.
+  ValidationResult Initialize(
+      const CollisionModelConfig& config) override;
+  ValidationResult Initialize(
+      const CollisionModelConfig& config,
+      const KinematicsModel* kinematics_model) override;
+
+  // Convenience initializer for tests and standalone users. This overload
+  // creates an internal URDF kinematics model as a fallback.
   ValidationResult Initialize(const std::string& urdf_xml,
                               std::vector<std::string> joint_names);
 
-  ValidationResult Initialize(
-      const CollisionModelConfig& config) override;
-
-  // Additional link pairs excluded from self-collision checking (on top of
-  // direct parent-child pairs). Order of names in a pair does not matter.
   void SetAllowedCollisionPairs(
       const std::vector<std::pair<std::string, std::string>>& pairs) override;
 
   CollisionCheckResult CheckState(
+      const JointPositions& positions,
+      const excavator_interfaces::msg::PlanningScene& scene) const override;
+
+  CollisionCheckResult CheckSelfCollision(
+      const JointPositions& positions) const override;
+
+  CollisionCheckResult CheckEnvironmentCollision(
       const JointPositions& positions,
       const excavator_interfaces::msg::PlanningScene& scene) const override;
 
@@ -43,15 +51,27 @@ class UrdfFclCollisionChecker final : public CollisionChecker {
       const excavator_interfaces::msg::PlanningScene& scene,
       double max_joint_step) const override;
 
+  CollisionCheckResult CheckPathCollisionWithObstacle(
+      const JointPath& path,
+      const excavator_interfaces::msg::PlanningScene& scene,
+      const std::string& obstacle_id, double max_joint_step) const override;
+
   CollisionCheckResult CheckTrajectory(
       const JointTrajectory& trajectory,
       const excavator_interfaces::msg::PlanningScene& scene,
       double max_joint_step) const override;
 
+  CollisionDistanceResult ComputeDistanceToObstacle(
+      const JointPositions& positions,
+      const excavator_interfaces::msg::PlanningScene& scene,
+      const std::string& obstacle_id) const override;
+
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
+
+using FclCollisionChecker = UrdfFclCollisionChecker;
 
 }  // namespace planning
 }  // namespace tramcar
