@@ -194,6 +194,53 @@ TEST(UrdfFclCollisionCheckerTest, SupportsInjectedKinematicsModel) {
   EXPECT_FALSE(result.collision);
 }
 
+TEST(UrdfFclCollisionCheckerTest, ConvertsBaseFramePoseToSceneRoot) {
+  const std::string urdf = R"(
+    <robot name="world_base_test">
+      <link name="world"/>
+      <link name="base_link">
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><sphere radius="0.2"/></geometry>
+        </collision>
+      </link>
+      <link name="arm_link"/>
+      <joint name="world_to_base" type="fixed">
+        <parent link="world"/><child link="base_link"/>
+        <origin xyz="0 0 0.4" rpy="0 0 0"/>
+      </joint>
+      <joint name="arm_joint" type="revolute">
+        <parent link="base_link"/><child link="arm_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-1" upper="1" effort="1" velocity="1"/>
+      </joint>
+    </robot>)";
+
+  UrdfKinematicsModel kinematics({"arm_joint"});
+  const auto kinematics_result = kinematics.InitializeFromString(urdf);
+  ASSERT_TRUE(kinematics_result.ok) << kinematics_result.message;
+
+  CollisionModelConfig config;
+  config.joint_names = {"arm_joint"};
+  config.model_source = urdf;
+  config.model_format = "urdf";
+  config.kinematics_reference_frame = "base_link";
+
+  UrdfFclCollisionChecker checker;
+  const auto initialized = checker.Initialize(config, &kinematics);
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "world";
+  scene.objects.push_back(MakeSphere("base_obstacle", 0.0, 0.0, 0.4, 0.1));
+
+  const CollisionCheckResult result = checker.CheckState({0.0}, scene);
+  ASSERT_TRUE(result.valid) << result.message;
+  EXPECT_TRUE(result.collision);
+  EXPECT_EQ(result.first_link, "base_link");
+}
+
 TEST(UrdfFclCollisionCheckerTest, SupportsScopedStateAndDistanceQueries) {
   UrdfFclCollisionChecker checker;
   const auto initialized = checker.Initialize(kRobotUrdf, {"arm_joint"});
