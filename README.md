@@ -65,7 +65,7 @@ python3 scripts/offline_visualization_test.py \
 | `excavator_interfaces` | ROS 2 消息与 `PlanTrajectory`、`ExecuteTrajectory` Action 定义 |
 | `excavator_common` | 轨迹/状态数据结构（`JointPath`、`JointTrajectory`、`RobotState`）、执行状态枚举、关节限位与轨迹校验、可替换规划接口，以及基于 URDF 或改进 DH 的正运动学（FK）、几何雅可比、阻尼最小二乘逆运动学（IK）和奇异性指标 |
 | `excavator_collision` | 碰撞检测抽象接口/工厂；当前实现为基于 FCL 的 URDF 碰撞几何加载、自碰撞/环境碰撞与路径采样检测（Box、Sphere、Cylinder、STL） |
-| `excavator_planning` | 规划器插件基类与 pluginlib 加载、直线基线规划器、分段时间参数化、轨迹插值、碰撞校验与 `/plan_trajectory` Action Server |
+| `excavator_planning` | 规划器插件基类与 pluginlib 加载、直线基线规划器、可切换的 simple / TOPP-RA 时间参数化、轨迹插值、碰撞校验与 `/plan_trajectory` Action Server |
 | `excavator_planner_rrtstar` | 独立存放的 RRT* 规划算法插件，通过 `planner_class` 参数替换启用 |
 | `excavator_sim_viz` | `TrajectoryController`、可替换 `ControllerInterface`、速度跟踪控制器、`KinematicSimulator`、执行 Action 与 `/joint_states` 发布 |
 | `excavator_visualization` | 独立可视化包：轨迹 Marker/末端路径/占用预览、两个 RViz Panel 插件、场景与曲线数据处理、离线回放 |
@@ -218,6 +218,24 @@ RRT* 特性：
    `pluginlib_export_plugin_description_file(excavator_planning planner_plugins.xml)`；
 4. 启动时设置 `planner_class:=<package>/<YourPlanner>` 即可替换。
 
+### 时间参数化算法切换（simple / TOPP-RA）
+
+时间参数化与路径规划解耦，规划服务通过 `time_parameterizer_class` 参数选择算法：
+
+- `simple`（默认）：原有的保守分段时间缩放，两点路径使用五次多项式；
+- `toppra`：TOPP-RA 时间最优参数化。路径按关节空间弦长参数化并拟合为 natural 边界的三次样条，再在速度/加速度约束下求最优时间律；使用内置 Seidel 求解器，无需 qpOASES/GLPK/pinocchio。
+
+```bash
+# 一键演示中切换到 TOPP-RA（不设置时保持 simple）
+ros2 launch excavator_sim_viz demo.launch.py time_parameterizer_class:=toppra
+
+# 只启动规划服务，并指定离散网格：N 个区间产生 N+1 个轨迹采样点
+ros2 launch excavator_planning planning_server.launch.py \
+  time_parameterizer_class:=toppra toppra_grid_points:=200
+```
+
+`toppra_grid_points` 越大，网格点之间的离散误差越小，求解耗时略增；默认 200。TOPP-RA 的输出会做一次统一的微小时间缩放（约 0.1%），使控制器按有限差分复核速度/加速度时也能严格通过。实现位于 `src/excavator_planning/src/toppra_time_parameterizer.cpp`；`src/toppra` 是 vendored 的上游 C++ 核心（MIT 许可）。
+
 `PlanTrajectory` 同时支持笛卡尔目标：设置 `use_pose_goal: true`，并把目标位姿写入 `target_pose`（参考坐标系为 URDF `base_link`）。规划服务先用 `excavator_common` 中运动学模块的阻尼最小二乘 IK 求目标关节配置，IK 失败会返回 `IK failed: ...`，不会进入执行流程。RViz 规划面板的 “Cartesian goal” 区域对应这一入口。四自由度挖机默认只求解位置（`constrain_orientation: false`）；设置 `constrain_orientation: true` 时同时求解姿态，无法同时满足时返回 IK 失败。IK 带信赖域与回溯线搜索，并对停滞、迭代上限和 wall-clock 预算分别报告失败原因。
 
 ### 改进 DH 运动学与可替换碰撞后端
@@ -282,6 +300,12 @@ python3 scripts/plot_dh_frames.py --q 0,0,0,0
 # 输出：docs/screenshots/dh_frames.png
 ```
 
+如果只想看**物理 link 坐标系**而不是原始 DH 坐标系，加 `--link-frames`（会应用 `links` 中的 DH→link 固定变换），这样与 `plot_urdf_frames.py --reference base_link` 的输出逐帧一致：
+
+```bash
+python3 scripts/plot_dh_frames.py --link-frames --q 0,-0.35,0.45,-0.4
+```
+
 在 RViz 中叠加到机器人模型上：
 
 ```bash
@@ -298,6 +322,29 @@ ros2 run rviz2 rviz2 -d install/excavator_visualization/share/excavator_visualiz
 ```
 
 > 当前 `excavator_dh.yaml` 使用 `base.rpy=[0, 0, 0]`：`swing_joint` 的 DH X 轴与 `base_link` 的 X 轴一致，Z 轴朝上。物理回转轴仍是 `(0,0,-1)`，所以 `swing_joint` 配置了 `theta_sign: -1`；生成的 URDF 中该关节轴为 `0 0 -1`，从而保证轨迹、碰撞和可视化的物理运动一致。
+
+#### URDF 坐标系视图
+
+与 DH 视图对应的 URDF link frame 静态视图。脚本直接解析 URDF；xacro 文件会自动展开（无需先 source ROS）：
+
+```bash
+python3 scripts/plot_urdf_frames.py --reference base_link
+# 输出：docs/screenshots/urdf_frames.png
+```
+
+- 默认模型为 `src/excavator_description/urdf/excavator_box.urdf.xacro`，可用 `--model` 指定其他 URDF/xacro；
+- 默认只绘制 `world → base_link → … → bucket_tip` 主链，`--all` 绘制全部 link（含液压缸/连杆分支）；
+- `--q` 按链上主动关节顺序给出关节值，例如 `--q 0,-0.35,0.45,-0.4`；也可用 `--joint NAME=VALUE` 单独覆盖；
+- `--reference base_link` 使输出与 `plot_dh_frames.py` 一样以 `base_link` 为原点，便于叠加对比；
+- `--show-joint-axes` 额外绘制各关节的转轴/移动轴（品红箭头，方向即 URDF `<axis>` 的正向）。
+
+查看 DH 生成 URDF 的 link frame（即 DH frame）：
+
+```bash
+python3 scripts/plot_urdf_frames.py \
+  --model src/excavator_description/urdf/excavator_dh.urdf \
+  --reference base_link --output docs/screenshots/urdf_dh_frames.png
+```
 
 #### DH2URDF 生成器
 
@@ -568,6 +615,26 @@ python3 scripts/publish_sample_trajectory.py \
   --trajectory-file src/excavator_visualization/config/sample_trajectory.csv \
   --rate 50 --replay-rate 1.0 --start-delay 2.0 --loop
 ```
+
+CSV 支持三种形式：
+
+1. 完整轨迹：`joint_names,...` 表头 + `t,positions...,velocities...,accelerations...` 行；
+2. 仅关节路径点：每行 `N` 列位置，或 `1+N` 列（首列为路径序号/时间，会被忽略）；
+3. 完整轨迹格式但速度、加速度列全为 0：视为只有路径点。
+
+形式 2 和 3 会自动调用 `excavator_planning` 安装的 TOPP-RA 工具
+`toppra_parameterize_csv` 做时间参数化，再把结果作为 `JointTrajectory`
+发布到 `/excavator/planned_trajectory`。限值和离散步数可配置：
+
+```bash
+python3 scripts/publish_sample_trajectory.py \
+  --trajectory-file src/excavator_visualization/sample_trajectory.csv \
+  --max-velocity 0.5,0.3,0.4,0.5 \
+  --max-acceleration 1.0,0.6,0.8,1.0 \
+  --toppra-grid-points 200
+```
+
+`--keep-timing` 可关闭“全零速度/加速度自动重定时”，按 CSV 原始时间发布。
 
 自动校验可视化输出（需要可视化节点已启动）：
 

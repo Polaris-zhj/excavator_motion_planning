@@ -1,7 +1,10 @@
+#include <dirent.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <g3log/loglevels.hpp>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -11,17 +14,19 @@
 #include <vector>
 
 #include "builtin_interfaces/msg/duration.hpp"
-#include "excavator_common/planner_interfaces.hpp"
 #include "excavator_collision/collision_checker.hpp"
 #include "excavator_collision/collision_checker_factory.hpp"
+#include "excavator_common/include/g3log.h"
+#include "excavator_common/planner_interfaces.hpp"
 #include "excavator_interfaces/action/plan_trajectory.hpp"
 #include "excavator_planning/baseline_planners.hpp"
 #include "excavator_planning/path_post_processor.hpp"
 #include "excavator_planning/planner_plugin.hpp"
-#include "pluginlib/class_loader.hpp"
+#include "excavator_planning/time_parameterizer_factory.hpp"
 #include "kinematics/dh_kinematics_model.hpp"
 #include "kinematics/urdf_kinematics_model.hpp"
 #include "kinematics/workspace_checker.hpp"
+#include "pluginlib/class_loader.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
@@ -121,12 +126,10 @@ JointPath MakeStraightPath(const JointPositions& start,
       1, static_cast<std::size_t>(std::ceil(max_delta / max_joint_step)));
   path.points.reserve(steps + 1);
   for (std::size_t step = 0; step <= steps; ++step) {
-    const double ratio =
-        static_cast<double>(step) / static_cast<double>(steps);
+    const double ratio = static_cast<double>(step) / static_cast<double>(steps);
     JointPositions positions(start.size(), 0.0);
     for (std::size_t joint = 0; joint < start.size(); ++joint) {
-      positions[joint] =
-          start[joint] + ratio * (goal[joint] - start[joint]);
+      positions[joint] = start[joint] + ratio * (goal[joint] - start[joint]);
     }
     path.points.push_back(std::move(positions));
   }
@@ -135,15 +138,14 @@ JointPath MakeStraightPath(const JointPositions& start,
 
 bool NormalizePose(const geometry_msgs::msg::Pose& message, Pose3* pose,
                    std::string* error) {
-  const double quaternion_norm =
-      message.orientation.x * message.orientation.x +
-      message.orientation.y * message.orientation.y +
-      message.orientation.z * message.orientation.z +
-      message.orientation.w * message.orientation.w;
+  const double quaternion_norm = message.orientation.x * message.orientation.x +
+                                 message.orientation.y * message.orientation.y +
+                                 message.orientation.z * message.orientation.z +
+                                 message.orientation.w * message.orientation.w;
   if (!std::isfinite(message.position.x) ||
       !std::isfinite(message.position.y) ||
-      !std::isfinite(message.position.z) ||
-      !std::isfinite(quaternion_norm) || quaternion_norm < 1.0e-9) {
+      !std::isfinite(message.position.z) || !std::isfinite(quaternion_norm) ||
+      quaternion_norm < 1.0e-9) {
     *error = "pose contains invalid position or orientation";
     return false;
   }
@@ -178,6 +180,23 @@ class PlanningServer final : public rclcpp::Node {
             "joint_names",
             {"swing_joint", "boom_joint", "stick_joint", "bucket_joint"})),
         kinematics_(nullptr) {
+    std::string g3log_path =
+        (std::string)PROJECT_PATH + "/../../../data/log/planner/";
+    /*判断是否存在log文件夹，没有就创建*/
+    DIR* dir = opendir(g3log_path.c_str());
+    if (dir == NULL) {
+      std::string cmd = "mkdir -p " + g3log_path;
+      int retVal = system(cmd.c_str());
+    } else {
+      closedir(dir);
+    }
+    g3::log_levels::setHighest(WARNING);
+
+    G3LogWorker g3_log_work;
+    g3_log_work.SetLogPath(g3log_path, "planning");
+    g3_log_work.SetPrintToTerminal(true);
+    g3_log_work.SetSaveToLog(true);
+    g3_log_work.Init();
     const std::string robot_description =
         declare_parameter<std::string>("robot_description", "");
     const std::string kinematics_backend =
@@ -188,6 +207,24 @@ class PlanningServer final : public rclcpp::Node {
         declare_parameter<std::string>("dh_parameters_file", "");
     planner_class_ = declare_parameter<std::string>(
         "planner_class", "excavator_planning/LinearPlannerPlugin");
+    time_parameterizer_class_ =
+        declare_parameter<std::string>("time_parameterizer_class", "simple");
+    const int toppra_grid_points =
+        declare_parameter<int>("toppra_grid_points", 200);
+    TimeParameterizerOptions time_parameterizer_options;
+    time_parameterizer_options.toppra_grid_points =
+        static_cast<std::size_t>(std::max(2, toppra_grid_points));
+    time_parameterizer_ = CreateTimeParameterizer(time_parameterizer_class_,
+                                                  time_parameterizer_options);
+    if (!time_parameterizer_) {
+      RCLCPP_ERROR(get_logger(),
+                   "Unknown time_parameterizer_class '%s'; falling back to "
+                   "'simple'",
+                   time_parameterizer_class_.c_str());
+      time_parameterizer_class_ = "simple";
+      time_parameterizer_ = CreateTimeParameterizer(time_parameterizer_class_,
+                                                    time_parameterizer_options);
+    }
     const double max_joint_step =
         declare_parameter<double>("max_joint_step", 0.05);
     max_collision_joint_step_ =
@@ -196,10 +233,9 @@ class PlanningServer final : public rclcpp::Node {
         "max_acceleration", {1.0, 0.6, 0.8, 1.0});
     const int max_detour_attempts =
         declare_parameter<int>("max_detour_attempts", 12);
-    simplify_path_ = declare_parameter<bool>("simplify_path", true);
+    simplify_path_ = declare_parameter<bool>("simplify_path", false);
     smooth_path_ = declare_parameter<bool>("smooth_path", false);
-    smoothing_iterations_ =
-        declare_parameter<int>("smoothing_iterations", 1);
+    smoothing_iterations_ = declare_parameter<int>("smoothing_iterations", 1);
     smoothing_alpha_ = declare_parameter<double>("smoothing_alpha", 0.2);
     workspace_link_ =
         declare_parameter<std::string>("workspace_link", "bucket_tip");
@@ -233,7 +269,8 @@ class PlanningServer final : public rclcpp::Node {
     ValidationResult load_result;
     if (kinematics_backend == "dh") {
       if (dh_parameters_file.empty()) {
-        load_result = {false, "dh_parameters_file is required for the dh backend"};
+        load_result = {false,
+                       "dh_parameters_file is required for the dh backend"};
       } else {
         auto model = std::make_unique<DhKinematicsModel>(joint_names_);
         load_result = model->InitializeFromFile(dh_parameters_file);
@@ -248,7 +285,8 @@ class PlanningServer final : public rclcpp::Node {
         kinematics_ = std::move(model);
       }
     } else {
-      load_result = {false, "unknown kinematics_backend: " + kinematics_backend};
+      load_result = {false,
+                     "unknown kinematics_backend: " + kinematics_backend};
     }
     if (!load_result.ok || !kinematics_) {
       RCLCPP_ERROR(get_logger(), "Failed to initialize kinematics model: %s",
@@ -284,9 +322,8 @@ class PlanningServer final : public rclcpp::Node {
           collision_config.model_format =
               collision_backend == "dh_fcl" ? "dh" : "urdf";
           collision_config.model_source =
-              collision_config.model_format == "urdf"
-                  ? robot_description
-                  : dh_parameters_file;
+              collision_config.model_format == "urdf" ? robot_description
+                                                      : dh_parameters_file;
           const auto collision_init =
               collision_checker_->Initialize(collision_config);
           if (!collision_init.ok) {
@@ -294,74 +331,75 @@ class PlanningServer final : public rclcpp::Node {
                          "Failed to initialize collision checker: %s",
                          collision_init.message.c_str());
           } else {
-          std::vector<std::pair<std::string, std::string>> allowed_pairs;
-          for (const std::string& entry : allowed_collision_pairs) {
-            const std::size_t separator = entry.find(':');
-            if (separator == std::string::npos || separator == 0 ||
-                separator + 1 == entry.size()) {
-              RCLCPP_WARN(get_logger(),
-                          "Ignoring malformed allowed_collision_pairs entry: %s",
-                          entry.c_str());
-              continue;
+            std::vector<std::pair<std::string, std::string>> allowed_pairs;
+            for (const std::string& entry : allowed_collision_pairs) {
+              const std::size_t separator = entry.find(':');
+              if (separator == std::string::npos || separator == 0 ||
+                  separator + 1 == entry.size()) {
+                RCLCPP_WARN(
+                    get_logger(),
+                    "Ignoring malformed allowed_collision_pairs entry: %s",
+                    entry.c_str());
+                continue;
+              }
+              allowed_pairs.emplace_back(entry.substr(0, separator),
+                                         entry.substr(separator + 1));
             }
-            allowed_pairs.emplace_back(entry.substr(0, separator),
-                                       entry.substr(separator + 1));
-          }
-          collision_checker_->SetAllowedCollisionPairs(allowed_pairs);
-          if (max_detour_attempts < 0 || planner_max_iterations <= 0 ||
-              !std::isfinite(planner_step_size) ||
-              planner_step_size <= 0.0 ||
-              !std::isfinite(planner_goal_bias) ||
-              planner_goal_bias < 0.0 || planner_goal_bias > 1.0 ||
-              !std::isfinite(planner_rewire_radius) ||
-              planner_rewire_radius <= 0.0 ||
-              !std::isfinite(planner_goal_tolerance) ||
-              planner_goal_tolerance < 0.0) {
-            RCLCPP_ERROR(get_logger(), "Planner plugin parameters are invalid");
-          } else {
-            PlannerSettings settings;
-            settings.joint_names = joint_names_;
-            settings.joint_limits = position_limits;
-            settings.max_joint_step = max_joint_step;
-            settings.max_detour_attempts = static_cast<std::size_t>(
-                max_detour_attempts);
-            settings.max_iterations =
-                static_cast<std::size_t>(planner_max_iterations);
-            settings.step_size = planner_step_size;
-            settings.goal_bias = planner_goal_bias;
-            settings.rewire_radius = planner_rewire_radius;
-            settings.goal_tolerance = planner_goal_tolerance;
-            settings.random_seed =
-                static_cast<unsigned int>(std::max(0, planner_random_seed));
-            settings.collision_check_resolution = max_collision_joint_step_;
-            try {
-              planner_loader_ =
-                  std::make_unique<pluginlib::ClassLoader<PlannerPlugin>>(
-                      "excavator_planning",
-                      "tramcar::planning::PlannerPlugin");
-              path_planner_ =
-                  planner_loader_->createSharedInstance(planner_class_);
-              path_planner_->Configure(settings);
-              initialized_ = ConfigureWorkspace(
-                  workspace_min, workspace_max, workspace_margin);
-            } catch (const pluginlib::PluginlibException& error) {
+            collision_checker_->SetAllowedCollisionPairs(allowed_pairs);
+            if (max_detour_attempts < 0 || planner_max_iterations <= 0 ||
+                !std::isfinite(planner_step_size) || planner_step_size <= 0.0 ||
+                !std::isfinite(planner_goal_bias) || planner_goal_bias < 0.0 ||
+                planner_goal_bias > 1.0 ||
+                !std::isfinite(planner_rewire_radius) ||
+                planner_rewire_radius <= 0.0 ||
+                !std::isfinite(planner_goal_tolerance) ||
+                planner_goal_tolerance < 0.0) {
               RCLCPP_ERROR(get_logger(),
-                           "Failed to load planner plugin '%s': %s",
-                           planner_class_.c_str(), error.what());
-              if (planner_loader_) {
-                std::string available;
-                for (const std::string& name :
-                     planner_loader_->getDeclaredClasses()) {
-                  available += " " + name;
+                           "Planner plugin parameters are invalid");
+            } else {
+              PlannerSettings settings;
+              settings.joint_names = joint_names_;
+              settings.joint_limits = position_limits;
+              settings.max_joint_step = max_joint_step;
+              settings.max_detour_attempts =
+                  static_cast<std::size_t>(max_detour_attempts);
+              settings.max_iterations =
+                  static_cast<std::size_t>(planner_max_iterations);
+              settings.step_size = planner_step_size;
+              settings.goal_bias = planner_goal_bias;
+              settings.rewire_radius = planner_rewire_radius;
+              settings.goal_tolerance = planner_goal_tolerance;
+              settings.random_seed =
+                  static_cast<unsigned int>(std::max(0, planner_random_seed));
+              settings.collision_check_resolution = max_collision_joint_step_;
+              try {
+                planner_loader_ =
+                    std::make_unique<pluginlib::ClassLoader<PlannerPlugin>>(
+                        "excavator_planning",
+                        "tramcar::planning::PlannerPlugin");
+                path_planner_ =
+                    planner_loader_->createSharedInstance(planner_class_);
+                path_planner_->Configure(settings);
+                initialized_ = ConfigureWorkspace(workspace_min, workspace_max,
+                                                  workspace_margin);
+              } catch (const pluginlib::PluginlibException& error) {
+                RCLCPP_ERROR(get_logger(),
+                             "Failed to load planner plugin '%s': %s",
+                             planner_class_.c_str(), error.what());
+                if (planner_loader_) {
+                  std::string available;
+                  for (const std::string& name :
+                       planner_loader_->getDeclaredClasses()) {
+                    available += " " + name;
+                  }
+                  RCLCPP_ERROR(get_logger(), "Available planner plugins:%s",
+                               available.c_str());
                 }
-                RCLCPP_ERROR(get_logger(), "Available planner plugins:%s",
-                             available.c_str());
               }
             }
           }
         }
       }
-    }
     }
 
     planned_trajectory_publisher_ =
@@ -369,8 +407,7 @@ class PlanningServer final : public rclcpp::Node {
             "/excavator/planned_trajectory", rclcpp::QoS(1).transient_local());
     collision_marker_publisher_ =
         create_publisher<visualization_msgs::msg::MarkerArray>(
-            "/excavator/collision_result",
-            rclcpp::QoS(1).transient_local());
+            "/excavator/collision_result", rclcpp::QoS(1).transient_local());
 
     scene_subscription_ =
         create_subscription<excavator_interfaces::msg::PlanningScene>(
@@ -394,15 +431,16 @@ class PlanningServer final : public rclcpp::Node {
         });
     if (initialized_) {
       RCLCPP_INFO(get_logger(),
-                  "Planning server ready (planner_class=%s, %zu joints)",
-                  planner_class_.c_str(), joint_names_.size());
+                  "Planning server ready (planner_class=%s, "
+                  "time_parameterizer=%s, %zu joints)",
+                  planner_class_.c_str(), time_parameterizer_class_.c_str(),
+                  joint_names_.size());
     }
   }
 
  private:
   bool ConfigureWorkspace(const std::vector<double>& minimum,
-                          const std::vector<double>& maximum,
-                          double margin) {
+                          const std::vector<double>& maximum, double margin) {
     if (minimum.empty() && maximum.empty()) {
       return true;
     }
@@ -456,10 +494,9 @@ class PlanningServer final : public rclcpp::Node {
   }
 
   rclcpp_action::GoalResponse HandleGoal(
-      const rclcpp_action::GoalUUID&,
-      std::shared_ptr<const PlanAction::Goal>) {
+      const rclcpp_action::GoalUUID&, std::shared_ptr<const PlanAction::Goal>) {
     return initialized_ ? rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE
-                       : rclcpp_action::GoalResponse::REJECT;
+                        : rclcpp_action::GoalResponse::REJECT;
   }
 
   rclcpp_action::CancelResponse HandleCancel(
@@ -529,42 +566,35 @@ class PlanningServer final : public rclcpp::Node {
       highlight.action = visualization_msgs::msg::Marker::ADD;
       highlight.pose = object.pose;
       highlight.color = MakeColor(1.0F, 0.1F, 0.1F, 0.45F);
-      if (object.primitive.type ==
-          shape_msgs::msg::SolidPrimitive::SPHERE) {
+      if (object.primitive.type == shape_msgs::msg::SolidPrimitive::SPHERE) {
         highlight.type = visualization_msgs::msg::Marker::SPHERE;
-        const double diameter =
-            object.primitive.dimensions.empty()
-                ? 0.2
-                : 2.0 * object.primitive.dimensions[0];
+        const double diameter = object.primitive.dimensions.empty()
+                                    ? 0.2
+                                    : 2.0 * object.primitive.dimensions[0];
         highlight.scale.x = diameter;
         highlight.scale.y = diameter;
         highlight.scale.z = diameter;
       } else if (object.primitive.type ==
                  shape_msgs::msg::SolidPrimitive::CYLINDER) {
         highlight.type = visualization_msgs::msg::Marker::CYLINDER;
-        highlight.scale.x =
-            object.primitive.dimensions.size() > 0
-                ? object.primitive.dimensions[0]
-                : 0.2;
+        highlight.scale.x = object.primitive.dimensions.size() > 0
+                                ? object.primitive.dimensions[0]
+                                : 0.2;
         highlight.scale.y = highlight.scale.x;
-        highlight.scale.z =
-            object.primitive.dimensions.size() > 1
-                ? object.primitive.dimensions[1]
-                : 0.2;
+        highlight.scale.z = object.primitive.dimensions.size() > 1
+                                ? object.primitive.dimensions[1]
+                                : 0.2;
       } else {
         highlight.type = visualization_msgs::msg::Marker::CUBE;
-        highlight.scale.x =
-            object.primitive.dimensions.size() > 0
-                ? object.primitive.dimensions[0]
-                : 0.2;
-        highlight.scale.y =
-            object.primitive.dimensions.size() > 1
-                ? object.primitive.dimensions[1]
-                : 0.2;
-        highlight.scale.z =
-            object.primitive.dimensions.size() > 2
-                ? object.primitive.dimensions[2]
-                : 0.2;
+        highlight.scale.x = object.primitive.dimensions.size() > 0
+                                ? object.primitive.dimensions[0]
+                                : 0.2;
+        highlight.scale.y = object.primitive.dimensions.size() > 1
+                                ? object.primitive.dimensions[1]
+                                : 0.2;
+        highlight.scale.z = object.primitive.dimensions.size() > 2
+                                ? object.primitive.dimensions[2]
+                                : 0.2;
       }
       markers.markers.push_back(highlight);
       break;
@@ -580,8 +610,7 @@ class PlanningServer final : public rclcpp::Node {
     const double allowed_time = ToSeconds(goal->allowed_planning_time);
     if (allowed_time < 0.0 || !std::isfinite(allowed_time)) {
       result->success = false;
-      result->message =
-          "allowed_planning_time must be finite and non-negative";
+      result->message = "allowed_planning_time must be finite and non-negative";
       goal_handle->abort(result);
       return;
     }
@@ -699,9 +728,8 @@ class PlanningServer final : public rclcpp::Node {
         ik_options.orientation_weight = 0.0;
         ik_options.orientation_tolerance = 1.0e9;
       }
-      const InverseKinematicsResult ik_result =
-          kinematics_->SolveIK(target_pose, goal->target_link, start,
-                              ik_options);
+      const InverseKinematicsResult ik_result = kinematics_->SolveIK(
+          target_pose, goal->target_link, start, ik_options);
       if (!ik_result.success) {
         result->success = false;
         result->message = "IK failed: " + ik_result.message;
@@ -749,10 +777,9 @@ class PlanningServer final : public rclcpp::Node {
       }
       return check.valid && !check.collision;
     };
-    auto segment_validity = [this, scene](
-                                const JointPositions& start_positions,
-                                const JointPositions& goal_positions,
-                                std::string* message) {
+    auto segment_validity = [this, scene](const JointPositions& start_positions,
+                                          const JointPositions& goal_positions,
+                                          std::string* message) {
       JointPath segment;
       segment.joint_names = joint_names_;
       segment.points = {start_positions, goal_positions};
@@ -779,7 +806,10 @@ class PlanningServer final : public rclcpp::Node {
       return !goal_handle->is_canceling() && !out_of_time();
     };
     const Clock::time_point planner_start = Clock::now();
+    //* 路径规划接口
     const PlanningResponse path_response = path_planner_->Plan(request);
+    std::cout << "===>path_response.path.size: "
+              << path_response.path.points.size() << std::endl;
     const double planner_seconds =
         std::chrono::duration<double>(Clock::now() - planner_start).count();
     RCLCPP_INFO(get_logger(), "Planner returned success=%s in %.3f s: %s",
@@ -790,16 +820,16 @@ class PlanningServer final : public rclcpp::Node {
       // Reserve a bounded grace period for path/trajectory verification so a
       // valid result found at the deadline is not discarded.
       const double grace_seconds = std::max(0.5, 0.25 * budget_seconds);
-      deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(
-                                   std::chrono::duration<double>(grace_seconds));
+      deadline =
+          Clock::now() + std::chrono::duration_cast<Clock::duration>(
+                             std::chrono::duration<double>(grace_seconds));
     }
     if (!path_response.success) {
       if (stop_if_needed()) {
         return;
       }
-      const JointPath straight =
-          MakeStraightPath(request.start, request.goal, joint_names_,
-                           max_collision_joint_step_);
+      const JointPath straight = MakeStraightPath(
+          request.start, request.goal, joint_names_, max_collision_joint_step_);
       const CollisionCheckResult straight_check = collision_checker_->CheckPath(
           straight, scene, max_collision_joint_step_);
       if (straight_check.collision) {
@@ -823,11 +853,13 @@ class PlanningServer final : public rclcpp::Node {
           processed_path, segment_validity, &simplified);
       if (!simplify_result.ok) {
         result->success = false;
-        result->message = "path simplification failed: " +
-                          simplify_result.message;
+        result->message =
+            "path simplification failed: " + simplify_result.message;
         goal_handle->abort(result);
         return;
       }
+      std::cout << "===>simplified.path.size: " << simplified.points.size()
+                << std::endl;
       processed_path = std::move(simplified);
     }
     if (smooth_path_) {
@@ -837,11 +869,12 @@ class PlanningServer final : public rclcpp::Node {
           segment_validity, &smoothed);
       if (!smooth_result.ok) {
         result->success = false;
-        result->message =
-            "path smoothing failed: " + smooth_result.message;
+        result->message = "path smoothing failed: " + smooth_result.message;
         goal_handle->abort(result);
         return;
       }
+      std::cout << "===>smoothed.path.size: " << smoothed.points.size()
+                << std::endl;
       processed_path = std::move(smoothed);
     }
     if (stop_if_needed()) {
@@ -868,9 +901,11 @@ class PlanningServer final : public rclcpp::Node {
       return;
     }
 
+    //* 时间参数化接口
     feedback->stage = "time_parameterization";
     feedback->progress = 0.6F;
-    feedback->message = "assigning conservative segment durations";
+    feedback->message =
+        "parameterizing the processed path with " + time_parameterizer_class_;
     goal_handle->publish_feedback(feedback);
 
     TimeParameterizationRequest time_request;
@@ -878,7 +913,7 @@ class PlanningServer final : public rclcpp::Node {
     time_request.max_velocity = max_velocity_;
     time_request.max_acceleration = max_acceleration_;
     const TimeParameterizationResponse time_response =
-        SimpleTimeParameterizer().Parameterize(time_request);
+        time_parameterizer_->Parameterize(time_request);
     if (!time_response.success) {
       result->success = false;
       result->message = time_response.message;
@@ -897,7 +932,7 @@ class PlanningServer final : public rclcpp::Node {
 
     const CollisionCheckResult trajectory_collision =
         collision_checker_->CheckTrajectory(time_response.trajectory, scene,
-                                           max_collision_joint_step_);
+                                            max_collision_joint_step_);
     if (!trajectory_collision.valid || trajectory_collision.collision) {
       PublishCollisionMarkers(trajectory_collision, scene);
       result->success = false;
@@ -910,16 +945,16 @@ class PlanningServer final : public rclcpp::Node {
       for (const JointTrajectoryPoint& point :
            time_response.trajectory.points) {
         Pose3 pose;
-        const ValidationResult fk = kinematics_->GetLinkPose(
-            point.positions, workspace_link_, &pose);
+        const ValidationResult fk =
+            kinematics_->GetLinkPose(point.positions, workspace_link_, &pose);
         if (!fk.ok) {
           result->success = false;
-          result->message = "workspace forward kinematics failed: " + fk.message;
+          result->message =
+              "workspace forward kinematics failed: " + fk.message;
           goal_handle->abort(result);
           return;
         }
-        const WorkspaceCheckResult workspace =
-            workspace_checker_.Check(pose);
+        const WorkspaceCheckResult workspace = workspace_checker_.Check(pose);
         if (!workspace.valid || !workspace.inside) {
           result->success = false;
           result->message =
@@ -953,6 +988,8 @@ class PlanningServer final : public rclcpp::Node {
   std::string planner_class_;
   std::unique_ptr<pluginlib::ClassLoader<PlannerPlugin>> planner_loader_;
   std::shared_ptr<PlannerPlugin> path_planner_;
+  std::string time_parameterizer_class_;
+  std::unique_ptr<TimeParameterizer> time_parameterizer_;
   PathPostProcessor path_processor_;
   WorkspaceChecker workspace_checker_{WorkspaceConfig{}};
   bool workspace_enabled_{false};
@@ -960,7 +997,7 @@ class PlanningServer final : public rclcpp::Node {
   double max_collision_joint_step_{0.03};
   std::vector<double> max_velocity_;
   std::vector<double> max_acceleration_;
-  bool simplify_path_{true};
+  bool simplify_path_{false};
   bool smooth_path_{false};
   int smoothing_iterations_{1};
   double smoothing_alpha_{0.2};

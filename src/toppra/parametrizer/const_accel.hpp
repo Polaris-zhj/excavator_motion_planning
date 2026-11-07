@@ -1,8 +1,8 @@
 #ifndef TOPPRA_CONST_ACCEL_HPP
 #define TOPPRA_CONST_ACCEL_HPP
 
-#include <toppra/parametrizer.hpp>
-#include <toppra/toppra.hpp>
+#include "toppra/src/parametrizer.hpp"
+#include "toppra/src/toppra.hpp"
 
 namespace toppra {
 
@@ -14,13 +14,14 @@ namespace parametrizer {
  */
 class ConstAccel : public Parametrizer {
  public:
-  ConstAccel(GeometricPathPtr path, const Vector &gridpoints, const Vector &vsquared);
+  ConstAccel(GeometricPathPtr path, const Vector& gridpoints,
+             const Vector& vsquared);
 
   const Vector& getTimes() const override { return m_ts; }
- 
+
  private:
   /** Return joint derivatives at specified times. */
-  Vectors eval_impl(const Vector &times, int order = 0) const override;
+  Vectors eval_impl(const Vector& times, int order = 0) const override;
   bool validate_impl() const override;
   Bound pathInterval_impl() const override;
 
@@ -36,7 +37,7 @@ class ConstAccel : public Parametrizer {
    * \param[out] us Path accelerations at the given time instances.
    *
    */
-  bool evalParams(const Vector &ts, Vector &ss, Vector &vs, Vector &us) const;
+  bool evalParams(const Vector& ts, Vector& ss, Vector& vs, Vector& us) const;
   // Compute times and acclerations from given data (path, velocities)
   void process_internals();
   // Vector of time instances (corresponded to gridpoints)

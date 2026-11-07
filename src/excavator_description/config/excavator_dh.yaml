@@ -29,7 +29,7 @@ joints:
   - name: boom_joint
     link: boom_link
     alpha_prev: -1.5707963267948966
-    a_prev: -0.009
+    a_prev: 1.009
     d: 0.0
     theta_offset: -0.30506418459896556
     limits: [-0.9, 0.35]

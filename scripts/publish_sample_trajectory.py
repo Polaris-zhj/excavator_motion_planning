@@ -6,6 +6,18 @@ The CSV format matches trajectory_replay_node / ReplayManager:
     joint_names,<joint_1>,...,<joint_N>
     t,positions...,velocities...,accelerations...
 
+A CSV containing only joint path points is also accepted:
+
+    joint_names,<joint_1>,...,<joint_N>
+    positions...
+
+An optional leading path index/time column is allowed as well. A full-format
+CSV whose velocity and acceleration columns are all zero is also treated as
+joint path points. Such inputs are time-parameterized with TOPP-RA (through
+the toppra_parameterize_csv helper installed by excavator_planning) using
+--max-velocity and --max-acceleration before they are published. Pass
+--keep-timing to publish the CSV timing as-is instead.
+
 The script publishes:
   /excavator/planned_trajectory  (transient local, once)
   /joint_states                  (active joints + passive cylinder joints)
@@ -42,6 +54,7 @@ import argparse
 import bisect
 import math
 import os
+import subprocess
 import sys
 import time
 
@@ -50,7 +63,10 @@ import time
 os.environ.setdefault("ROS_DOMAIN_ID", "77")
 
 import rclpy
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import (
+    get_package_prefix,
+    get_package_share_directory,
+)
 from builtin_interfaces.msg import Duration
 from excavator_interfaces.msg import ExecutionStatus
 from nav_msgs.msg import Path
@@ -101,58 +117,194 @@ def as_duration(seconds):
     return Duration(sec=whole, nanosec=nanosec)
 
 
-def load_csv(path):
-    """Read the joint trajectory CSV.
+def parse_limit_list(text, option):
+    """Parse a comma-separated list of positive finite limits."""
+    try:
+        values = [
+            float(field.strip()) for field in text.split(",") if field.strip()
+        ]
+    except ValueError as error:
+        raise ValueError(f"{option}: {error}") from error
+    if not values or any(
+            not math.isfinite(value) or value <= 0.0 for value in values):
+        raise ValueError(
+            f"{option} must be a comma-separated list of positive finite "
+            "numbers")
+    return values
 
-    Returns (joint_names, points), where every point is a tuple:
-    (t, positions, velocities, accelerations).
-    """
+
+def split_csv_lines(lines, source):
+    """Return (joint_names, numeric_rows) from non-empty CSV lines."""
+    header = [field.strip() for field in lines[0].split(",")]
+    # Tolerate trailing empty columns, e.g. a header that was exported with
+    # the full trajectory width but only names the active joints.
+    while header and header[-1] == "":
+        header.pop()
+    if len(header) < 2 or header[0] != "joint_names":
+        raise ValueError(
+            f"{source}: CSV must start with a 'joint_names,...' header row")
+    joint_names = header[1:]
+    if any(not name for name in joint_names):
+        raise ValueError(f"{source}: CSV contains an empty joint name")
+
+    rows = []
+    for line_number, line in enumerate(lines[1:], start=2):
+        fields = [field.strip() for field in line.split(",")]
+        # Tolerate trailing empty columns in data rows as well.
+        while fields and fields[-1] == "":
+            fields.pop()
+        try:
+            values = [float(field) for field in fields]
+        except ValueError as error:
+            raise ValueError(f"{source}: line {line_number}: {error}") from error
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError(f"{source}: line {line_number}: non-finite value")
+        rows.append(values)
+    if not rows:
+        raise ValueError(f"{source}: CSV contains no data rows")
+    return joint_names, rows
+
+
+def read_csv_file(path):
     if not os.path.isfile(path):
         raise ValueError(f"trajectory file not found: {path}")
     with open(path, "r", encoding="utf-8") as stream:
         lines = [line.strip() for line in stream if line.strip()]
     if not lines:
         raise ValueError(f"trajectory file is empty: {path}")
+    return split_csv_lines(lines, path)
 
-    header = [field.strip() for field in lines[0].split(",")]
-    if len(header) < 2 or header[0] != "joint_names":
-        raise ValueError(
-            "CSV must start with a 'joint_names,...' header row")
-    joint_names = header[1:]
-    if any(not name for name in joint_names):
-        raise ValueError("CSV contains an empty joint name")
+
+def full_trajectory_points(joint_names, rows, source):
+    """Convert full trajectory rows into (t, q, qd, qdd) tuples."""
     joint_count = len(joint_names)
     expected_columns = 1 + 3 * joint_count
-
     points = []
     previous_t = None
-    for line_number, line in enumerate(lines[1:], start=2):
-        fields = [field.strip() for field in line.split(",")]
-        if len(fields) != expected_columns:
+    for line_number, values in enumerate(rows, start=2):
+        if len(values) != expected_columns:
             raise ValueError(
-                f"line {line_number}: expected {expected_columns} columns, "
-                f"got {len(fields)}")
-        try:
-            values = [float(field) for field in fields]
-        except ValueError as error:
-            raise ValueError(f"line {line_number}: {error}") from error
-        if not all(math.isfinite(value) for value in values):
-            raise ValueError(f"line {line_number}: non-finite value")
+                f"{source}: line {line_number}: expected "
+                f"{expected_columns} columns, got {len(values)}")
         t = values[0]
         if t < 0.0:
-            raise ValueError(f"line {line_number}: time must be non-negative")
+            raise ValueError(
+                f"{source}: line {line_number}: time must be non-negative")
         if previous_t is not None and t <= previous_t:
             raise ValueError(
-                f"line {line_number}: time must be strictly increasing")
+                f"{source}: line {line_number}: time must be strictly "
+                "increasing")
         previous_t = t
         positions = values[1:1 + joint_count]
         velocities = values[1 + joint_count:1 + 2 * joint_count]
         accelerations = values[1 + 2 * joint_count:1 + 3 * joint_count]
         points.append((t, positions, velocities, accelerations))
+    return points
 
-    if not points:
-        raise ValueError(f"trajectory file contains no data rows: {path}")
-    return joint_names, points
+
+def find_toppra_helper():
+    """Locate the C++ TOPP-RA CSV helper installed by excavator_planning."""
+    try:
+        prefix = get_package_prefix("excavator_planning")
+    except Exception as error:  # noqa: BLE001 - package may not be sourced
+        raise ValueError(
+            "cannot locate excavator_planning; source install/setup.bash "
+            "before running this script") from error
+    helper = os.path.join(
+        prefix, "lib", "excavator_planning", "toppra_parameterize_csv")
+    if not os.path.isfile(helper):
+        raise ValueError(
+            f"TOPP-RA helper not found: {helper}; rebuild excavator_planning")
+    return helper
+
+
+def parameterize_path(path, joint_names, max_velocity, max_acceleration,
+                      grid_points):
+    """Run TOPP-RA on a joint path and return full trajectory points."""
+    joint_count = len(joint_names)
+    if len(max_velocity) != joint_count:
+        raise ValueError(
+            "--max-velocity must provide one positive value per joint "
+            f"({joint_count} joints in the CSV)")
+    if len(max_acceleration) != joint_count:
+        raise ValueError(
+            "--max-acceleration must provide one positive value per joint "
+            f"({joint_count} joints in the CSV)")
+
+    helper = find_toppra_helper()
+    command = [
+        helper,
+        "--input", path,
+        "--grid-points", str(grid_points),
+        "--max-velocity", ",".join(f"{value:.12g}" for value in max_velocity),
+        "--max-acceleration",
+        ",".join(f"{value:.12g}" for value in max_acceleration),
+    ]
+    try:
+        completed = subprocess.run(
+            command, capture_output=True, text=True, check=False, timeout=120)
+    except subprocess.TimeoutExpired as error:
+        raise ValueError("TOPP-RA time parameterization timed out") from error
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or (
+            f"exit code {completed.returncode}")
+        raise ValueError(f"TOPP-RA time parameterization failed: {detail}")
+
+    lines = [
+        line.strip() for line in completed.stdout.splitlines() if line.strip()
+    ]
+    if not lines:
+        raise ValueError("TOPP-RA helper produced no output")
+    output_names, output_rows = split_csv_lines(lines, "TOPP-RA output")
+    if output_names != joint_names:
+        raise ValueError(
+            "TOPP-RA output joint names do not match the input CSV")
+    return full_trajectory_points(output_names, output_rows, "TOPP-RA output")
+
+
+def has_zero_motion(points, tolerance=1.0e-9):
+    """True when every stored velocity and acceleration is (near) zero."""
+    return all(
+        abs(value) <= tolerance
+        for _, _, velocities, accelerations in points
+        for value in velocities + accelerations)
+
+
+def load_csv(path, max_velocity, max_acceleration, toppra_grid_points,
+             keep_timing=False):
+    """Read the CSV and return (joint_names, points).
+
+    A full trajectory CSV has rows of 1 + 3*N columns. A CSV that only
+    contains joint path points, with N columns or 1 + N columns (optional
+    leading path index/time), is time-parameterized with TOPP-RA first.
+    Full-format rows whose velocities and accelerations are all zero are
+    treated as joint path points as well, unless keep_timing is true.
+    Every returned point is a tuple (t, positions, velocities, accelerations).
+    """
+    joint_names, rows = read_csv_file(path)
+    joint_count = len(joint_names)
+    widths = {len(row) for row in rows}
+
+    if widths == {1 + 3 * joint_count}:
+        points = full_trajectory_points(joint_names, rows, path)
+        if not keep_timing and has_zero_motion(points):
+            return joint_names, parameterize_path(
+                path, joint_names, max_velocity, max_acceleration,
+                toppra_grid_points)
+        return joint_names, points
+
+    if len(widths) == 1:
+        width = next(iter(widths))
+        if width in (joint_count, 1 + joint_count):
+            return joint_names, parameterize_path(
+                path, joint_names, max_velocity, max_acceleration,
+                toppra_grid_points)
+
+    raise ValueError(
+        "CSV rows must be either full trajectory rows "
+        f"(1 + 3*{joint_count} columns) or joint path points "
+        f"({joint_count} or {1 + joint_count} columns), all with the same "
+        "column count")
 
 
 def to_ros_trajectory(joint_names, points, stamp):
@@ -432,7 +584,23 @@ def parse_arguments():
             "excavator_visualization", "config", "sample_trajectory.csv")
     parser.add_argument(
         "--trajectory-file", default=default_file,
-        help="CSV file with the trajectory to publish")
+        help="CSV file with the trajectory (or joint path points) to publish")
+    parser.add_argument(
+        "--max-velocity", default="0.5,0.3,0.4,0.5",
+        help="joint velocity limits (rad/s) used when the CSV contains joint "
+             "path points only")
+    parser.add_argument(
+        "--max-acceleration", default="1.0,0.6,0.8,1.0",
+        help="joint acceleration limits (rad/s^2) used when the CSV contains "
+             "joint path points only")
+    parser.add_argument(
+        "--toppra-grid-points", type=int, default=200,
+        help="TOPP-RA discretization intervals for path-only CSV files "
+             "(samples = N + 1)")
+    parser.add_argument(
+        "--keep-timing", action="store_true",
+        help="use the CSV time/velocity/acceleration columns as-is even when "
+             "all velocities and accelerations are zero")
     parser.add_argument(
         "--rate", type=float, default=50.0,
         help="joint-state/status publication rate in Hz")
@@ -463,8 +631,14 @@ def main():
         print("FAIL: --check-timeout must be positive")
         return 2
     try:
+        max_velocity = parse_limit_list(args.max_velocity, "--max-velocity")
+        max_acceleration = parse_limit_list(
+            args.max_acceleration, "--max-acceleration")
+        if args.toppra_grid_points < 2:
+            raise ValueError("--toppra-grid-points must be at least 2")
         joint_names, points = load_csv(
-            os.path.abspath(args.trajectory_file))
+            os.path.abspath(args.trajectory_file), max_velocity,
+            max_acceleration, args.toppra_grid_points, args.keep_timing)
     except ValueError as error:
         print(f"FAIL: {error}")
         return 2

@@ -1,13 +1,13 @@
 #include <toppra/constraint/linear_joint_velocity.hpp>
 
-#include <toppra/geometric_path.hpp>
+#include "toppra/src/geometric_path.hpp"
 
 namespace toppra {
 namespace constraint {
 
 /// \brief 打印关节速度约束信息到输出流。
 /// 先输出类名，再调用基类打印方法，最后显示上下限向量。
-std::ostream &LinearJointVelocity::print(std::ostream &os) const {
+std::ostream& LinearJointVelocity::print(std::ostream& os) const {
   os << "LinearJointVelocity\n";
   return LinearConstraint::print(os)
          << "    Lower velocity limit: " << m_lower.transpose()
@@ -41,11 +41,11 @@ void LinearJointVelocity::check() {
 /// \param path 几何路径对象。
 /// \param gridpoints 网格点向量（路径参数 s 的采样点）。
 /// \param xbound 输出：每个网格点处 ṡ² 的 [下界, 上界]。
-void LinearJointVelocity::computeParams_impl(const GeometricPath &path,
-                                             const Vector &gridpoints,
-                                             Vectors &, Vectors &, Vectors &,
-                                             Matrices &, Vectors &, Bounds &,
-                                             Bounds &xbound) {
+void LinearJointVelocity::computeParams_impl(const GeometricPath& path,
+                                             const Vector& gridpoints, Vectors&,
+                                             Vectors&, Vectors&, Matrices&,
+                                             Vectors&, Bounds&,
+                                             Bounds& xbound) {
   // 网格点数量
   Eigen::Index N_1 = gridpoints.size();
   // 自由度数量
@@ -84,12 +84,11 @@ void LinearJointVelocity::computeParams_impl(const GeometricPath &path,
     }
     // xbound 下界：若 sdmin > 0 则 x 不能为 0（ṡ² >= sdmin²）
     xbound[i][0] = 0;
-    if (sdmin > 0)
-      xbound[i][0] = sdmin * sdmin;
+    if (sdmin > 0) xbound[i][0] = sdmin * sdmin;
     // xbound 上界：x = ṡ² <= sdmax²
     xbound[i][1] = sdmax * sdmax;
   }
 }
 
-} // namespace constraint
-} // namespace toppra
+}  // namespace constraint
+}  // namespace toppra

@@ -4,9 +4,10 @@
 #include <cstddef>
 #include <cstdlib>
 #include <stdexcept>
-#include <toppra/parametrizer.hpp>
 #include <toppra/parametrizer/const_accel.hpp>
-#include <toppra/toppra.hpp>
+
+#include "toppra/src/parametrizer.hpp"
+#include "toppra/src/toppra.hpp"
 
 namespace toppra {
 namespace parametrizer {
@@ -24,8 +25,8 @@ void ConstAccel::process_internals() {
   for (std::size_t i = 0; i < m_gridpoints.size() - 1; i++) {
     m_us[i] = 0.5 * (m_vs[i + 1] * m_vs[i + 1] - m_vs[i] * m_vs[i]) /
               (m_gridpoints[i + 1] - m_gridpoints[i]);
-    m_ts[i + 1] =
-        m_ts[i] + 2 * (m_gridpoints[i + 1] - m_gridpoints[i]) / (m_vs[i + 1] + m_vs[i]);
+    m_ts[i + 1] = m_ts[i] + 2 * (m_gridpoints[i + 1] - m_gridpoints[i]) /
+                                (m_vs[i + 1] + m_vs[i]);
   }
   TOPPRA_LOG_DEBUG("process_internals: ts=" << m_ts.transpose());
   TOPPRA_LOG_DEBUG("process_internals: us=" << m_us.transpose());
@@ -35,16 +36,18 @@ void ConstAccel::process_internals() {
 bool ConstAccel::evalParams(const Vector& ts, Vector& ss, Vector& vs,
                             Vector& us) const {
   TOPPRA_LOG_DEBUG("evalParams: ts=" << ts.transpose());
-  assert (m_ts.size() >= 2);
+  assert(m_ts.size() >= 2);
   ss.resize(ts.size());
   vs.resize(ts.size());
   us.resize(ts.size());
   int k_grid = 0;
   for (std::size_t i = 0; i < ts.size(); i++) {
-    // find k_grid s.t                     m_ts[k_grid] <= ts[i] < m_ts[k_grid + 1], or
+    // find k_grid s.t                     m_ts[k_grid] <= ts[i] < m_ts[k_grid +
+    // 1], or
     //      k_grid = 0 if                  ts[i] < m_ts[0], or
     //      k_grid = m_ts.size() - 2 if    ts[i] > m_ts
-    auto ptr = std::lower_bound(m_ts.data() + 1, m_ts.data() + m_ts.size() - 1, ts[i]);
+    auto ptr =
+        std::lower_bound(m_ts.data() + 1, m_ts.data() + m_ts.size() - 1, ts[i]);
     k_grid = ptr - m_ts.data() - 1;
     TOPPRA_LOG_DEBUG("ts[i]=" << ts[i] << ", k_grid=" << k_grid);
 
@@ -53,7 +56,8 @@ bool ConstAccel::evalParams(const Vector& ts, Vector& ss, Vector& vs,
     value_type dt = ts[i] - m_ts[k_grid];
     us[i] = m_us[k_grid];
     vs[i] = m_vs[k_grid] + dt * us[i];
-    ss[i] = m_gridpoints[k_grid] + dt * m_vs[k_grid] + 0.5 * dt * dt * m_us[k_grid];
+    ss[i] =
+        m_gridpoints[k_grid] + dt * m_vs[k_grid] + 0.5 * dt * dt * m_us[k_grid];
   }
   return true;
 }
@@ -68,12 +72,15 @@ Vectors ConstAccel::eval_impl(const Vector& times, int order) const {
   // TOPPRA_REL_TOL) are allowed. This quantity is small (~1e-8 sec)
   // so it has almost nil effect on the physical trajectory quality.
   auto interval = pathInterval_impl();
-  if ((times.array() < (interval[0] * (1 - TOPPRA_REL_TOL) - TOPPRA_ABS_TOL)).any()) {
-    throw std::runtime_error("Request time instances out of numerical lower bounds.");
-  }
-  else if ((times.array() > (interval[1] * (1 + TOPPRA_REL_TOL) + TOPPRA_ABS_TOL)).any())
-  {
-    throw std::runtime_error("Request time instances out of numerical upper bounds.");
+  if ((times.array() < (interval[0] * (1 - TOPPRA_REL_TOL) - TOPPRA_ABS_TOL))
+          .any()) {
+    throw std::runtime_error(
+        "Request time instances out of numerical lower bounds.");
+  } else if ((times.array() >
+              (interval[1] * (1 + TOPPRA_REL_TOL) + TOPPRA_ABS_TOL))
+                 .any()) {
+    throw std::runtime_error(
+        "Request time instances out of numerical upper bounds.");
   }
 
   // Even if the times are within the bounds of the parametrizer, numerical
@@ -127,7 +134,8 @@ bool ConstAccel::validate_impl() const {
     if (i == 0) continue;
     if (vs_norm[i] < 1e-5) {
       TOPPRA_LOG_DEBUG(
-          "Very small path velocity detected. Probably a numerical error occured.");
+          "Very small path velocity detected. Probably a numerical error "
+          "occured.");
       return false;
     }
   }

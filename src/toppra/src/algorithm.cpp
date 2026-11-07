@@ -9,12 +9,14 @@
 //
 // 本文件只负责：构造、模板方法 computePathParametrization、以及两个公共辅助流程
 // computeControllableSets 与 computeFeasibleSets。具体前向目标由派生类实现。
-#include <toppra/algorithm.hpp>
+#include "toppra/src/algorithm.hpp"
 
-#include "toppra/toppra.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+
+#include "excavator_common/include/g3log.h"
+#include "toppra/src/toppra.hpp"
 
 namespace toppra {
 
@@ -22,20 +24,19 @@ namespace toppra {
 // constraints 以值传递后 move 进成员，避免不必要的拷贝；path 直接持有共享指针。
 // 注意：此时并不会初始化求解器或网格点，真正的工作在 initialize() 中完成。
 PathParametrizationAlgorithm::PathParametrizationAlgorithm(
-    LinearConstraintPtrs constraints, const GeometricPathPtr &path)
-    : m_constraints(std::move(constraints)), m_path(path) {};
+    LinearConstraintPtrs constraints, const GeometricPathPtr& path)
+    : m_constraints(std::move(constraints)), m_path(path){};
 
 // 算法主入口（模板方法）：计算给定路径的时间参数化。
 // vel_start / vel_end 分别为路径起点、终点的路径速度（\dot{s}），默认 0。
 // 流程：初始化 -> 建立求解器 -> 反向计算可控集 -> 正向求解最优速度剖面。
 // 返回值：ReturnCode::OK 表示成功；否则为具体错误码，可经 getErrorMessage()
 // 查看详情。
-ReturnCode
-PathParametrizationAlgorithm::computePathParametrization(value_type vel_start,
-                                                         value_type vel_end) {
-  initialize();            // 准备网格点、结果容器并初始化求解器
-  m_solver->setupSolver(); // 求解器自身的一次性设置（如 warm-start 准备）
-
+ReturnCode PathParametrizationAlgorithm::computePathParametrization(
+    value_type vel_start, value_type vel_end) {
+  initialize();  // 准备网格点、结果容器并初始化求解器
+  m_solver->setupSolver();  // 求解器自身的一次性设置（如 warm-start 准备）
+  A3WARN << "computePathParametrization";
   // 终点处速度平方的上/下界（向量每个分量都等于 vel_end）
   Bound vel_ends;
   vel_ends.setConstant(vel_end);
@@ -63,8 +64,8 @@ PathParametrizationAlgorithm::computePathParametrization(value_type vel_start,
 //   - x：当前网格点的路径速度平方；
 //   - solution[1] 即对应 x，因此取 solution[1] 作为求解结果。
 //   - H 为空矩阵表示使用线性目标（LP），此处仅优化 x，故无需二次项。
-ReturnCode
-PathParametrizationAlgorithm::computeControllableSets(const Bound &vel_ends) {
+ReturnCode PathParametrizationAlgorithm::computeControllableSets(
+    const Bound& vel_ends) {
   TOPPRA_LOG_DEBUG("computeControllableSets");
   bool solver_ret;
   Vector g_upper{2}, g_lower{2}, solution;
@@ -76,7 +77,7 @@ PathParametrizationAlgorithm::computeControllableSets(const Bound &vel_ends) {
   // 终点网格点（索引 m_N）处的可控集即给定的终点速度平方约束
   m_data.controllable_sets.row(m_N) = vel_ends.cwiseAbs2();
 
-  Matrix H; // 空矩阵 -> 线性目标
+  Matrix H;  // 空矩阵 -> 线性目标
   // x 为当前网格点的速度平方取值范围，初值使用 m_initXBound（默认 [0,100]）；
   // x_next 为下一网格点（已计算出的可控集）的上下界。
   Bound x(m_initXBound), x_next;
@@ -87,8 +88,7 @@ PathParametrizationAlgorithm::computeControllableSets(const Bound &vel_ends) {
   // 从倒数第二个网格点反向遍历到第 0 个（i 为无符号，用 (size_t)-1
   // 作终止条件防下溢）
   for (std::size_t i = m_N - 1; i != (std::size_t)-1; i--) {
-    if (log_dbg)
-      TOPPRA_LOG_UNCONDITIONAL(log::DEBUG, i << ", " << m_N);
+    if (log_dbg) TOPPRA_LOG_UNCONDITIONAL(log::DEBUG, i << ", " << m_N);
     // 下一网格点的可控集区间作为本 stage 的转移约束
     x_next = m_data.controllable_sets.row(i + 1);
     // 求上界：最大化 x，满足本 stage 可行性及 x -> x_next 的转移约束
@@ -104,7 +104,7 @@ PathParametrizationAlgorithm::computeControllableSets(const Bound &vel_ends) {
       return ReturnCode::ERR_FAIL_CONTROLLABLE;
     }
 
-    m_data.controllable_sets(i, 1) = solution[1]; // 记录上界
+    m_data.controllable_sets(i, 1) = solution[1];  // 记录上界
 
     // 求下界：最小化 x
     solver_ret =
@@ -126,7 +126,7 @@ PathParametrizationAlgorithm::computeControllableSets(const Bound &vel_ends) {
     // if the solution is negative.
     // 译：求解器偶尔会在本应为正的边界下返回负解，这里对负值做截断为 0 的修正。
     m_data.controllable_sets(i, 0) =
-        std::max(0.0, solution[1]); // 记录下界，钳制非负
+        std::max(0.0, solution[1]);  // 记录下界，钳制非负
   }
   return ReturnCode::OK;
 }
@@ -146,7 +146,7 @@ ReturnCode PathParametrizationAlgorithm::computeFeasibleSets() {
   g_upper << 1e-9, -1;
   g_lower << -1e-9, 1;
 
-  Matrix H; // 空矩阵 -> 线性目标
+  Matrix H;  // 空矩阵 -> 线性目标
   // 起点处速度平方的初始可行范围，两个变量初值均取 [0,100]
   Bound x, x_next;
   x << 0, 100;
@@ -164,7 +164,7 @@ ReturnCode PathParametrizationAlgorithm::computeFeasibleSets() {
       return ReturnCode::ERR_FAIL_FEASIBLE;
     }
 
-    m_data.feasible_sets(i, 1) = solution[1]; // 记录上界
+    m_data.feasible_sets(i, 1) = solution[1];  // 记录上界
 
     // 求下界：最小化 x
     solver_ret =
@@ -178,7 +178,7 @@ ReturnCode PathParametrizationAlgorithm::computeFeasibleSets() {
       return ReturnCode::ERR_FAIL_FEASIBLE;
     }
 
-    m_data.feasible_sets(i, 0) = solution[1]; // 记录下界
+    m_data.feasible_sets(i, 0) = solution[1];  // 记录下界
   }
   return ReturnCode::OK;
 }
@@ -188,10 +188,10 @@ ReturnCode PathParametrizationAlgorithm::computeFeasibleSets() {
 //   1. 首、末网格点必须与路径参数区间 [s_min, s_max] 的端点一致；
 //   2. 网格点必须严格单调递增（相邻差值必须 > 0）。
 // 设置后把 m_initialized 置为 false，强制下次求解重新初始化。
-void PathParametrizationAlgorithm::setGridpoints(const Vector &gridpoints) {
-  Bound I(m_path->pathInterval()); // 路径参数区间 [s_min, s_max]
+void PathParametrizationAlgorithm::setGridpoints(const Vector& gridpoints) {
+  Bound I(m_path->pathInterval());  // 路径参数区间 [s_min, s_max]
   auto s = gridpoints.size();
-  m_N = s - 1; // 网格点数量 = 段数 + 1
+  m_N = s - 1;  // 网格点数量 = 段数 + 1
   // 校验：首末点需与路径区间端点吻合（允许 TOPPRA_NEARLY_ZERO 级别的数值误差）
   if (std::fabs(gridpoints[0] - I(0)) > TOPPRA_NEARLY_ZERO ||
       std::fabs(gridpoints[gridpoints.size() - 1] - I(1)) > TOPPRA_NEARLY_ZERO)
@@ -201,7 +201,7 @@ void PathParametrizationAlgorithm::setGridpoints(const Vector &gridpoints) {
   if (((gridpoints.tail(s - 1) - gridpoints.head(s - 1)).array() <= 0).any())
     throw std::invalid_argument("gridpoints should be strictly increasing.");
   m_data.gridpoints = gridpoints;
-  m_initialized = false; // 需要重新初始化
+  m_initialized = false;  // 需要重新初始化
 }
 
 // 初始化：准备网格点、分配结果容器，并初始化求解器。
@@ -211,17 +211,16 @@ void PathParametrizationAlgorithm::setGridpoints(const Vector &gridpoints) {
 //   2. 否则若 m_N == 0，则由路径自身 proposeGridpoints() 自动推荐；
 //   3. 否则在路径参数区间 [s_min, s_max] 上线性等分生成 m_N + 1 个点。
 void PathParametrizationAlgorithm::initialize() {
-  m_errorStream = std::stringstream(); // 清空上一轮的错误信息
-  if (m_initialized)
-    return; // 已初始化，无需重复
+  m_errorStream = std::stringstream();  // 清空上一轮的错误信息
+  if (m_initialized) return;            // 已初始化，无需重复
   if (!m_solver)
-    throw std::logic_error("You must set a solver first."); // 必须先设置 solver
-  Bound I(m_path->pathInterval()); // 路径参数区间 [s_min, s_max]
+    throw std::logic_error(
+        "You must set a solver first.");  // 必须先设置 solver
+  Bound I(m_path->pathInterval());        // 路径参数区间 [s_min, s_max]
 
   // Intiialize the gridpoints based on N
   // 译：根据 N 初始化网格点
   if (m_data.gridpoints.size() == 0) {
-
     // If the number of gridpoint is set to 0, try to find automatically a
     // reasonable gridpoint
     // 译：若网格点数量为 0（且 N 也为 0），则由路径自动推荐一组合理网格点
@@ -243,12 +242,12 @@ void PathParametrizationAlgorithm::initialize() {
 
   // 分配输出容器：每个网格点对应一行
   auto s = m_data.gridpoints.size();
-  m_data.parametrization.resize(s);      // 最终速度剖面（路径速度平方）
-  m_data.controllable_sets.resize(s, 2); // 可控集：列 0 下界，列 1 上界
-  m_data.feasible_sets.resize(s, 2);     // 可行集：列 0 下界，列 1 上界
+  m_data.parametrization.resize(s);  // 最终速度剖面（路径速度平方）
+  m_data.controllable_sets.resize(s, 2);  // 可控集：列 0 下界，列 1 上界
+  m_data.feasible_sets.resize(s, 2);  // 可行集：列 0 下界，列 1 上界
   // 将约束、路径与网格点交给具体求解器做内部预计算
   m_solver->initialize(m_constraints, m_path, m_data.gridpoints);
   m_initialized = true;
 }
 
-} // namespace toppra
+}  // namespace toppra

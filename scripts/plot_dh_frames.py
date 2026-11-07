@@ -62,6 +62,10 @@ def main():
                              "config", "excavator_dh.yaml"))
     parser.add_argument("--q", default="0,0,0,0")
     parser.add_argument(
+        "--link-frames", action="store_true",
+        help="draw the physical link frames instead of the raw DH frames "
+             "(applies the fixed transforms in the 'links' section)")
+    parser.add_argument(
         "--base-xyz", default=None,
         help="override base.xyz, e.g. 0,0,1.7572")
     parser.add_argument(
@@ -87,7 +91,8 @@ def main():
     current = transform(
         tuple(base.get("xyz", [0.0, 0.0, 0.0])),
         tuple(base.get("rpy", [0.0, 0.0, 0.0])))
-    frames = [("base_link", np.eye(4), "base_link")]
+    links = parameters.get("links") or {}
+    dh_frames = []
     for index, joint in enumerate(parameters["joints"]):
         sign = float(joint.get("theta_sign", 1.0))
         if index == 0:
@@ -98,13 +103,34 @@ def main():
                        rz(sign * q[index] +
                           float(joint.get("theta_offset", 0.0))) @
                        tz(float(joint.get("d", 0.0))))
-        frames.append((joint["name"], current.copy(), joint["name"]))
-    tool = (parameters.get("links") or {}).get("bucket_tip")
+        dh_frames.append((joint["name"], current.copy(),
+                          joint.get("link", joint["name"])))
+    tool = links.get("bucket_tip")
+    tool_frame = None
     if tool is not None:
-        current = current @ transform(
+        tool_frame = current @ transform(
             tuple(tool.get("xyz", [0.0, 0.0, 0.0])),
             tuple(tool.get("rpy", [0.0, 0.0, 0.0])))
-        frames.append(("bucket_tip", current.copy(), "bucket_tip"))
+
+    if args.link_frames:
+        # Apply the fixed DH->physical-link transforms so the plotted frames
+        # are directly comparable with plot_urdf_frames.py.
+        frames = [("base_link", np.eye(4), "base_link")]
+        for joint_name, matrix, link_name in dh_frames:
+            offset = links.get(link_name)
+            if offset is not None:
+                matrix = matrix @ transform(
+                    tuple(offset.get("xyz", [0.0, 0.0, 0.0])),
+                    tuple(offset.get("rpy", [0.0, 0.0, 0.0])))
+            frames.append((link_name, matrix, link_name))
+        if tool_frame is not None:
+            frames.append(("bucket_tip", tool_frame, "bucket_tip"))
+    else:
+        frames = [("base_link", np.eye(4), "base_link")]
+        frames.extend((joint_name, matrix, joint_name)
+                      for joint_name, matrix, _ in dh_frames)
+        if tool_frame is not None:
+            frames.append(("bucket_tip", tool_frame, "bucket_tip"))
 
     figure = plt.figure(figsize=(14, 9), facecolor="#202226")
     axis = figure.add_subplot(111, projection="3d")
@@ -120,6 +146,10 @@ def main():
         "boom_joint": (0.65, 0.65, 0.30),
         "stick_joint": (-0.30, 0.40, 0.30),
         "bucket_joint": (-0.90, 0.45, 0.85),
+        "swing_link": (-0.85, -0.45, 0.35),
+        "boom_link": (0.55, 0.50, 0.30),
+        "stick_link": (-0.40, 0.35, 0.30),
+        "bucket_link": (-0.65, 0.35, 0.65),
         "bucket_tip": (0.30, -0.10, -0.40),
     }
     table_rows = []
@@ -166,20 +196,32 @@ def main():
     for pane in (axis.xaxis.pane, axis.yaxis.pane, axis.zaxis.pane):
         pane.set_facecolor("#25282d")
         pane.set_edgecolor("#44484f")
+    frame_kind = ("Physical link frames (from modified DH)"
+                  if args.link_frames else "Modified DH frames")
     axis.set_title(
-        "Modified DH frames (q = " +
+        frame_kind + " (q = " +
         ", ".join(f"{value:g}" for value in q) + ", base rpy = " +
         ", ".join(f"{value:g}" for value in
                   base.get("rpy", [0.0, 0.0, 0.0])) + ")",
         color="white", pad=14)
     table = "frame / joint       origin xyz [m]\n" + "\n".join(table_rows)
-    figure.text(0.685, 0.91,
-                "DH frame origins (base_link)\n\n" + table +
-                "\n\nX: red   Y: green   Z: blue"
+    if args.link_frames:
+        note = ("\n\nX: red   Y: green   Z: blue"
+                "\n\nDH->link offsets from the"
+                "\n'links' section applied, so these"
+                "\nmatch plot_urdf_frames.py with"
+                "\n--reference base_link.")
+    else:
+        note = ("\n\nX: red   Y: green   Z: blue"
                 "\n\nswing_joint/boom_joint origins"
                 "\ndiffer by 9 mm"
                 "\n(common normal); axes are\n"
-                "drawn at the same point.",
+                "drawn at the same point.")
+    figure.text(0.685, 0.91,
+                ("Link frame origins (base_link)\n\n"
+                 if args.link_frames else
+                 "DH frame origins (base_link)\n\n") +
+                table + note,
                 color="#dddddd", fontsize=8.2, family="monospace",
                 va="top")
     axis.text2D(0.02, 0.96, "X", transform=axis.transAxes,

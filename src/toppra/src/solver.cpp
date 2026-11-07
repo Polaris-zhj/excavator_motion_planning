@@ -1,7 +1,7 @@
-#include <toppra/solver.hpp>
+#include "toppra/src/solver.hpp"
 
-#include <toppra/constraint.hpp>
-#include <toppra/geometric_path.hpp>
+#include "toppra/src/constraint.hpp"
+#include "toppra/src/geometric_path.hpp"
 
 #ifdef BUILD_WITH_qpOASES
 #include <toppra/solver/qpOASES-wrapper.hpp>
@@ -15,27 +15,27 @@ namespace toppra {
 
 SolverPtr Solver::createDefault() {
 #ifdef BUILD_WITH_qpOASES
-    return std::make_shared<solver::qpOASESWrapper>();
+  return std::make_shared<solver::qpOASESWrapper>();
 #elif BUILD_WITH_GLPK
-    return std::make_shared<solver::GLPKWrapper>();
+  return std::make_shared<solver::GLPKWrapper>();
 #else
-    return std::make_shared<solver::Seidel>();
+  return std::make_shared<solver::Seidel>();
 #endif
 }
 
-void Solver::initialize (const LinearConstraintPtrs& constraints, const GeometricPathPtr& path,
-    const Vector& times)
-{
+void Solver::initialize(const LinearConstraintPtrs& constraints,
+                        const GeometricPathPtr& path, const Vector& times) {
   m_constraints = constraints;
   m_path = path;
   m_times = times;
-  m_N = times.size()-1;
+  m_N = times.size() - 1;
   m_nV = 2;
   m_deltas = times.tail(m_N) - times.head(m_N);
 
   if ((m_deltas.array() <= 0).any())
     throw std::invalid_argument("Invalid times.");
-  /// \todo assert that the time range of the path equals [ times[0], times[m_N] ].
+  /// \todo assert that the time range of the path equals [ times[0], times[m_N]
+  /// ].
 
   // Compute the constraints parameters
   LinearConstraintParams emptyLinParams;
@@ -56,10 +56,9 @@ void Solver::initialize (const LinearConstraintPtrs& constraints, const Geometri
       bparam->cid = c;
     } else
       bparam = &emptyBoxParams;
-    lin->computeParams(*path, times,
-        lparam->a, lparam->b, lparam->c, lparam->F, lparam->g,
-        bparam->u, bparam->x);
+    lin->computeParams(*path, times, lparam->a, lparam->b, lparam->c, lparam->F,
+                       lparam->g, bparam->u, bparam->x);
   }
 }
 
-} // namespace toppra
+}  // namespace toppra

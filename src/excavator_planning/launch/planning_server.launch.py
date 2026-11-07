@@ -34,6 +34,12 @@ def generate_launch_description():
             "planner_class",
             default_value="excavator_planning/LinearPlannerPlugin",
             description="pluginlib class of the path planner"),
+        DeclareLaunchArgument(
+            "time_parameterizer_class", default_value="simple",
+            description="time parameterization algorithm: simple or toppra"),
+        DeclareLaunchArgument(
+            "toppra_grid_points", default_value="200",
+            description="TOPP-RA discretization intervals (samples = N + 1)"),
         DeclareLaunchArgument("planner_max_iterations", default_value="2000"),
         DeclareLaunchArgument("planner_step_size", default_value="0.25"),
         DeclareLaunchArgument("planner_goal_bias", default_value="0.10"),
@@ -64,6 +70,11 @@ def generate_launch_description():
                     "swing_joint", "boom_joint", "stick_joint", "bucket_joint"
                 ],
                 "planner_class": LaunchConfiguration("planner_class"),
+                "time_parameterizer_class": LaunchConfiguration(
+                    "time_parameterizer_class"),
+                "toppra_grid_points": ParameterValue(
+                    LaunchConfiguration("toppra_grid_points"),
+                    value_type=int),
                 "planner_max_iterations": ParameterValue(
                     LaunchConfiguration("planner_max_iterations"),
                     value_type=int),
@@ -84,7 +95,7 @@ def generate_launch_description():
                 "max_joint_step": 0.05,
                 "max_collision_joint_step": 0.03,
                 "max_detour_attempts": 12,
-                "simplify_path": True,
+                "simplify_path": False,
                 "smooth_path": False,
                 "smoothing_iterations": 1,
                 "smoothing_alpha": 0.2,

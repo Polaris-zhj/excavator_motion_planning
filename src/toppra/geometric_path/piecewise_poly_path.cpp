@@ -1,15 +1,14 @@
-#include <toppra/geometric_path/piecewise_poly_path.hpp>
-
+#include <Eigen/Dense>
+#include <array>
 #include <cassert>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <ostream>
 #include <stdexcept>
 #include <string>
-#include <array>
+#include <toppra/geometric_path/piecewise_poly_path.hpp>
 
-#include <Eigen/Dense>
-#include <toppra/toppra.hpp>
+#include "toppra/src/toppra.hpp"
 
 #ifdef TOPPRA_OPT_MSGPACK
 #include <msgpack.hpp>
@@ -17,17 +16,17 @@
 
 namespace toppra {
 
-BoundaryCond::BoundaryCond(int order, const std::vector<value_type> &values_in)
+BoundaryCond::BoundaryCond(int order, const std::vector<value_type>& values_in)
     : order(order), bc_type(Manual) {
   values.resize(values_in.size());
-  for (std::size_t i = 0; i < values.size(); i++)
-    values(i) = values_in[i];
+  for (std::size_t i = 0; i < values.size(); i++) values(i) = values_in[i];
 }
 
-BoundaryCond::BoundaryCond(int order, const Vector values): order(order), values(values), bc_type(Manual){};
+BoundaryCond::BoundaryCond(int order, const Vector values)
+    : order(order), values(values), bc_type(Manual){};
 
-BoundaryCond::BoundaryCond(std::string type){
-  if (type == "not-a-knot" || type == "notaknot"){
+BoundaryCond::BoundaryCond(std::string type) {
+  if (type == "not-a-knot" || type == "notaknot") {
     bc_type = Type::NotAKnot;
   } else if (type == "clamped") {
     bc_type = Type::Clamped;
@@ -37,17 +36,16 @@ BoundaryCond::BoundaryCond(std::string type){
     throw std::runtime_error("Unknown bc type" + type);
 }
 
-
-namespace _cubic_spline{
+namespace _cubic_spline {
 /**
  * @brief Check, potentially modify input.
- * 
- * @param positions 
- * @param times 
- * @param bc_type 
+ *
+ * @param positions
+ * @param times
+ * @param bc_type
  */
-void checkInputArgs(const Vectors &positions, const Vector &times,
-                    BoundaryCondFull &bc_type) {
+void checkInputArgs(const Vectors& positions, const Vector& times,
+                    BoundaryCondFull& bc_type) {
   if (positions.size() != times.rows()) {
     throw std::runtime_error(
         "The length of 'positions' doesn't match the length of 'times'.");
@@ -72,17 +70,18 @@ void checkInputArgs(const Vectors &positions, const Vector &times,
 
   // Validate boundary conditions
   size_t expected_deriv_size = positions[0].size();
-  for (BoundaryCond &bc : bc_type) {
-    if (bc.bc_type == BoundaryCond::Clamped){
+  for (BoundaryCond& bc : bc_type) {
+    if (bc.bc_type == BoundaryCond::Clamped) {
       bc.order = 1;
       bc.values.resize(expected_deriv_size);
       bc.values.setZero();
-    } else if (bc.bc_type == BoundaryCond::Natural){
+    } else if (bc.bc_type == BoundaryCond::Natural) {
       bc.order = 2;
       bc.values.resize(expected_deriv_size);
       bc.values.setZero();
-    }  else if (bc.bc_type == BoundaryCond::NotAKnot) {
-      throw std::runtime_error("Boundary condition NotAKnot is not implemented");
+    } else if (bc.bc_type == BoundaryCond::NotAKnot) {
+      throw std::runtime_error(
+          "Boundary condition NotAKnot is not implemented");
     } else if (bc.order != 1 && bc.order != 2) {
       throw std::runtime_error(
           "The specified derivative order must be 1 or 2.");
@@ -97,15 +96,15 @@ void checkInputArgs(const Vectors &positions, const Vector &times,
 
 /**
  * @brief Compute the piecewise poly coefficients.
- * 
- * @param positions 
- * @param times 
- * @param bc_type 
- * @param coefficients 
+ *
+ * @param positions
+ * @param times
+ * @param bc_type
+ * @param coefficients
  */
-void computePPolyCoefficients(const Vectors &positions, const Vector &times,
-                              const BoundaryCondFull &bc_type,
-                              Matrices &coefficients) {
+void computePPolyCoefficients(const Vectors& positions, const Vector& times,
+                              const BoundaryCondFull& bc_type,
+                              Matrices& coefficients) {
   // h(i) = t(i+1) - t(i)
   Vector h(times.rows() - 1);
   for (auto i = 0u; i < h.rows(); i++) {
@@ -178,20 +177,21 @@ void computePPolyCoefficients(const Vectors &positions, const Vector &times,
     }
   }
 }
-}
+}  // namespace _cubic_spline
 
-PiecewisePolyPath
-PiecewisePolyPath::CubicSpline(const Vectors &positions, const Vector &times,
-                               BoundaryCondFull bc_type) {
+PiecewisePolyPath PiecewisePolyPath::CubicSpline(const Vectors& positions,
+                                                 const Vector& times,
+                                                 BoundaryCondFull bc_type) {
   Matrices coefficients(times.size() - 1);
   _cubic_spline::checkInputArgs(positions, times, bc_type);
-  _cubic_spline::computePPolyCoefficients(positions, times, bc_type, coefficients);
-  std::vector<value_type> breakpoints(times.data(), times.data() + times.size());
+  _cubic_spline::computePPolyCoefficients(positions, times, bc_type,
+                                          coefficients);
+  std::vector<value_type> breakpoints(times.data(),
+                                      times.data() + times.size());
   return PiecewisePolyPath(coefficients, breakpoints);
 }
 
-
-Matrix differentiateCoefficients(const Matrix &coefficients) {
+Matrix differentiateCoefficients(const Matrix& coefficients) {
   Matrix deriv(coefficients.rows(), coefficients.cols());
   deriv.setZero();
   for (Eigen::Index i = 1; i < coefficients.rows(); i++) {
@@ -200,19 +200,18 @@ Matrix differentiateCoefficients(const Matrix &coefficients) {
   return deriv;
 }
 
-PiecewisePolyPath::PiecewisePolyPath(const Matrices & coefficients,
+PiecewisePolyPath::PiecewisePolyPath(const Matrices& coefficients,
                                      std::vector<value_type> breakpoints)
-    : GeometricPath (int(coefficients[0].cols())),
-      m_coefficients(coefficients), m_breakpoints(std::move(breakpoints)),
+    : GeometricPath(int(coefficients[0].cols())),
+      m_coefficients(coefficients),
+      m_breakpoints(std::move(breakpoints)),
       m_degree(int(coefficients[0].rows()) - 1) {
-
   checkInputArgs();
   computeDerivativesCoefficients();
 }
 Bound PiecewisePolyPath::pathInterval() const {
   return Bound{m_breakpoints.front(), m_breakpoints.back()};
 };
-
 
 Vector PiecewisePolyPath::eval_single(value_type pos, int order) const {
   assert(order < 3 && order >= 0);
@@ -232,7 +231,7 @@ Vector PiecewisePolyPath::eval_single(value_type pos, int order) const {
 
 // Not the most efficient implementation. Coefficients are
 // recomputed. Should be refactored.
-Vectors PiecewisePolyPath::eval(const Vector &positions, int order) const {
+Vectors PiecewisePolyPath::eval(const Vector& positions, int order) const {
   assert(order < 3 && order >= 0);
   Vectors outputs;
   outputs.resize(positions.size());
@@ -244,16 +243,16 @@ Vectors PiecewisePolyPath::eval(const Vector &positions, int order) const {
 
 size_t PiecewisePolyPath::findSegmentIndex(value_type pos) const {
   if (pos > m_breakpoints.back() || pos < m_breakpoints[0]) {
-    constexpr auto max_precision {std::numeric_limits<value_type>::digits10 + 1};
+    constexpr auto max_precision{std::numeric_limits<value_type>::digits10 + 1};
     std::ostringstream oss;
-    oss << std::setprecision(max_precision) << "Position " << pos <<
-      " is outside of range [ " << m_breakpoints[0] << ", " << m_breakpoints.back() << ']';
+    oss << std::setprecision(max_precision) << "Position " << pos
+        << " is outside of range [ " << m_breakpoints[0] << ", "
+        << m_breakpoints.back() << ']';
     throw std::runtime_error(oss.str());
   }
   auto it = std::upper_bound(m_breakpoints.begin(), m_breakpoints.end(), pos);
   auto idx = std::distance(m_breakpoints.begin(), it) - 1;
-  if(idx < 0)
-    return 0;
+  if (idx < 0) return 0;
   return std::min<size_t>(idx, m_coefficients.size() - 1);
 }
 
@@ -271,8 +270,6 @@ void PiecewisePolyPath::checkInputArgs() {
   }
 }
 
-
-
 void PiecewisePolyPath::computeDerivativesCoefficients() {
   m_coefficients_1.reserve(m_coefficients.size());
   m_coefficients_2.reserve(m_coefficients.size());
@@ -284,23 +281,27 @@ void PiecewisePolyPath::computeDerivativesCoefficients() {
   }
 }
 
-const Matrix &PiecewisePolyPath::getCoefficient(size_t seg_index, int order) const {
-  switch (order)
-  {
-    case 0: return m_coefficients.at(seg_index);
-    case 1: return m_coefficients_1.at(seg_index);
-    case 2: return m_coefficients_2.at(seg_index);
-    default: break;
+const Matrix& PiecewisePolyPath::getCoefficient(size_t seg_index,
+                                                int order) const {
+  switch (order) {
+    case 0:
+      return m_coefficients.at(seg_index);
+    case 1:
+      return m_coefficients_1.at(seg_index);
+    case 2:
+      return m_coefficients_2.at(seg_index);
+    default:
+      break;
   }
 
   return m_coefficients_2.at(seg_index);
 }
 
-void PiecewisePolyPath::serialize(std::ostream &O) const {
+void PiecewisePolyPath::serialize(std::ostream& O) const {
 #ifdef TOPPRA_OPT_MSGPACK
   MatricesData allraw;
   allraw.reserve(m_coefficients.size());
-  for (const auto &c : m_coefficients) {
+  for (const auto& c : m_coefficients) {
     MatrixData raw{c.rows(), c.cols(), {c.data(), c.data() + c.size()}};
     allraw.push_back(raw);
   }
@@ -309,7 +310,7 @@ void PiecewisePolyPath::serialize(std::ostream &O) const {
 #endif
 }
 
-void PiecewisePolyPath::deserialize(std::istream &I) {
+void PiecewisePolyPath::deserialize(std::istream& I) {
 #ifdef TOPPRA_OPT_MSGPACK
   std::stringstream buffer;
   buffer << I.rdbuf();
@@ -317,11 +318,12 @@ void PiecewisePolyPath::deserialize(std::istream &I) {
 
   auto oh = msgpack::unpack(buffer.str().data(), buffer.str().size(), offset);
   auto obj = oh.get();
-  TOPPRA_LOG_DEBUG(obj << "at offset:=" << offset << "/" << buffer.str().size());
+  TOPPRA_LOG_DEBUG(obj << "at offset:=" << offset << "/"
+                       << buffer.str().size());
   MatricesData x;
   toppra::Matrices new_coefficients;
   obj.convert(x);
-  for (auto const &y : x) {
+  for (auto const& y : x) {
     int nrow, ncol;
     nrow = std::get<0>(y);
     ncol = std::get<1>(y);
@@ -336,7 +338,8 @@ void PiecewisePolyPath::deserialize(std::istream &I) {
   m_coefficients = new_coefficients;
   oh = msgpack::unpack(buffer.str().data(), buffer.str().size(), offset);
   obj = oh.get();
-  TOPPRA_LOG_DEBUG(obj << "at offset:=" << offset << "/" << buffer.str().size());
+  TOPPRA_LOG_DEBUG(obj << "at offset:=" << offset << "/"
+                       << buffer.str().size());
   assert(offset == buffer.str().size());
   obj.convert(m_breakpoints);
 
@@ -355,8 +358,8 @@ void PiecewisePolyPath::reset() {
   m_coefficients_2.clear();
 }
 
-void PiecewisePolyPath::initAsHermite(const Vectors &positions,
-                                      const Vectors &velocities,
+void PiecewisePolyPath::initAsHermite(const Vectors& positions,
+                                      const Vectors& velocities,
                                       const std::vector<value_type> times) {
   reset();
   assert(positions.size() == times.size());
@@ -366,39 +369,33 @@ void PiecewisePolyPath::initAsHermite(const Vectors &positions,
   m_degree = 3;  // cubic spline
   m_breakpoints = times;
   for (std::size_t i = 0; i < times.size() - 1; i++) {
-    TOPPRA_LOG_DEBUG("Processing segment index: " << i << "/" << times.size() - 1);
+    TOPPRA_LOG_DEBUG("Processing segment index: " << i << "/"
+                                                  << times.size() - 1);
     Matrix c(4, m_dof);
     auto dt = times[i + 1] - times[i];
     assert(dt > 0);
     // ... after some derivations
     c.row(3) = positions.at(i);
     c.row(2) = velocities.at(i);
-    c.row(0) = (velocities.at(i + 1).transpose() * dt -
-                2 * positions.at(i + 1).transpose() + c.row(2) * dt + 2 * c.row(3)) /
-               pow(dt, 3);
-    c.row(1) = (velocities.at(i + 1).transpose() - c.row(2) - 3 * c.row(0) * dt * dt) /
-               (2 * dt);
+    c.row(0) =
+        (velocities.at(i + 1).transpose() * dt -
+         2 * positions.at(i + 1).transpose() + c.row(2) * dt + 2 * c.row(3)) /
+        pow(dt, 3);
+    c.row(1) =
+        (velocities.at(i + 1).transpose() - c.row(2) - 3 * c.row(0) * dt * dt) /
+        (2 * dt);
     m_coefficients.push_back(c);
   }
   checkInputArgs();
   computeDerivativesCoefficients();
 }
 
-PiecewisePolyPath PiecewisePolyPath::constructHermite(
-    const Vectors &positions, const Vectors &velocities,
-    const std::vector<value_type> times) {
-  PiecewisePolyPath path;
-  path.initAsHermite(positions, velocities, times);
-  return path;
-}
-
 PiecewisePolyPath PiecewisePolyPath::CubicHermiteSpline(
-    const Vectors &positions, const Vectors &velocities,
+    const Vectors& positions, const Vectors& velocities,
     const std::vector<value_type> times) {
   PiecewisePolyPath path;
   path.initAsHermite(positions, velocities, times);
   return path;
 }
 
-
-} // namespace toppra
+}  // namespace toppra

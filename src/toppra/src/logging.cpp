@@ -1,4 +1,4 @@
-#include <toppra/logging.hpp>
+#include "toppra/src/logging.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -22,7 +22,7 @@ constexpr Level kDefaultLevel = WARN;
 constexpr Level kDefaultLevel = NONE;
 #endif
 
-std::ostream *g_stream = &std::cout;
+std::ostream* g_stream = &std::cout;
 bool g_timestamp = false;
 
 /// Guards g_stream writes so that concurrent solvers do not interleave
@@ -30,7 +30,7 @@ bool g_timestamp = false;
 /// which stays lock-free on the hot path.
 std::mutex g_writeMutex;
 
-void writeTimestamp(std::ostream &os) {
+void writeTimestamp(std::ostream& os) {
   using namespace std::chrono;
   auto now = system_clock::now();
   auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
@@ -57,13 +57,13 @@ void setLevel(Level level) { g_level = level; }
 
 Level getLevel() { return g_level; }
 
-void setStream(std::ostream &stream) { g_stream = &stream; }
+void setStream(std::ostream& stream) { g_stream = &stream; }
 
 void resetStream() { g_stream = &std::cout; }
 
 bool isEnabled(Level level) { return level <= g_level; }
 
-const char *levelTag(Level level) {
+const char* levelTag(Level level) {
   switch (level) {
     case ERROR:
       return "E";
@@ -80,9 +80,9 @@ const char *levelTag(Level level) {
   }
 }
 
-void write(Level level, const std::string &msg) {
+void write(Level level, const std::string& msg) {
   std::lock_guard<std::mutex> lock(g_writeMutex);
-  std::ostream &os = *g_stream;
+  std::ostream& os = *g_stream;
   os << '[';
   if (g_timestamp) writeTimestamp(os);
   os << levelTag(level) << "] " << msg << '\n';
@@ -98,7 +98,7 @@ Sink::~Sink() {
   }
 }
 
-std::ostream &Sink::buffer() { return *m_oss; }
+std::ostream& Sink::buffer() { return *m_oss; }
 
 /// \brief Enable or disable the wall-clock timestamp prefix.
 ///

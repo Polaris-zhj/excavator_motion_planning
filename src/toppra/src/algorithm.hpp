@@ -1,12 +1,13 @@
 #ifndef TOPPRA_ALGORITHM_HPP
 #define TOPPRA_ALGORITHM_HPP
 
-#include <stdexcept>
 #include <sstream>
-#include <toppra/constraint.hpp>
-#include <toppra/geometric_path.hpp>
-#include <toppra/solver.hpp>
-#include <toppra/toppra.hpp>
+#include <stdexcept>
+
+#include "toppra/src/constraint.hpp"
+#include "toppra/src/geometric_path.hpp"
+#include "toppra/src/solver.hpp"
+#include "toppra/src/toppra.hpp"
 
 namespace toppra {
 
@@ -59,17 +60,20 @@ class PathParametrizationAlgorithm {
    *
    */
   PathParametrizationAlgorithm(LinearConstraintPtrs constraints,
-                               const GeometricPathPtr &path);
+                               const GeometricPathPtr& path);
 
   /** \brief Set the level of discretization used by the solver.
    *
    * If is zero, will attempt to detect automatically the most
-   * suitable grid.  
-   * 
+   * suitable grid.
+   *
    * TODO: Automatic gridpoint selection is not implemented in the CPP
    * API.
    */
-  void setN(int N) { m_N = N; m_initialized = false; };
+  void setN(int N) {
+    m_N = N;
+    m_initialized = false;
+  };
 
   /** \brief Set the gridpoints (points with the path intervals)
    *
@@ -104,17 +108,12 @@ class PathParametrizationAlgorithm {
   /** Set initial bounds on \f$ \dot{s}^2.
    * This is helpfull when the solver encounters numerical issues.
    */
-  void setInitialXBounds (const Bound& xbound)
-  {
-    m_initXBound = xbound;
-  }
+  void setInitialXBounds(const Bound& xbound) { m_initXBound = xbound; }
 
-  /** Get the error message when PathParametrizationAlgorithm::computePathParametrization
-   * failed.
+  /** Get the error message when
+   * PathParametrizationAlgorithm::computePathParametrization failed.
    */
-  std::string getErrorMessage() const {
-    return m_errorStream.str();
-  }
+  std::string getErrorMessage() const { return m_errorStream.str(); }
 
   virtual ~PathParametrizationAlgorithm() {}
 
@@ -134,7 +133,7 @@ class PathParametrizationAlgorithm {
 
   /** Compute the sets of controllable squared path velocities.
    */
-  ReturnCode computeControllableSets(const Bound &vel_ends);
+  ReturnCode computeControllableSets(const Bound& vel_ends);
 
   /** To be implemented in child method. */
   LinearConstraintPtrs m_constraints;

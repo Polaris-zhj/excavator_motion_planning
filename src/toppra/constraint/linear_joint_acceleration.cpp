@@ -1,15 +1,14 @@
 #include <cassert>
-
 #include <toppra/constraint/linear_joint_acceleration.hpp>
 
-#include <toppra/geometric_path.hpp>
+#include "toppra/src/geometric_path.hpp"
 
 namespace toppra {
 namespace constraint {
 
 /// \brief 打印关节加速度约束信息到输出流。
 /// 先输出类名，再调用基类打印方法，最后显示上下限向量。
-std::ostream &LinearJointAcceleration::print(std::ostream &os) const {
+std::ostream& LinearJointAcceleration::print(std::ostream& os) const {
   os << "LinearJointAcceleration\n";
   return LinearConstraint::print(os)
          << "    Lower acceleration limit: " << m_lower.transpose()
@@ -39,9 +38,11 @@ void LinearJointAcceleration::check() {
 /// F 的构造使得：
 ///   - 前 ndofs 行取 v 的正分量，对应 q̈ <= upper。
 ///   - 后 ndofs 行取 v 的负分量，对应 -q̈ <= -lower 即 q̈ >= lower。
-void LinearJointAcceleration::computeParams_impl(
-    const GeometricPath &path, const Vector &times, Vectors &a, Vectors &b,
-    Vectors &c, Matrices &F, Vectors &g, Bounds &, Bounds &) {
+void LinearJointAcceleration::computeParams_impl(const GeometricPath& path,
+                                                 const Vector& times,
+                                                 Vectors& a, Vectors& b,
+                                                 Vectors& c, Matrices& F,
+                                                 Vectors& g, Bounds&, Bounds&) {
   // 网格点数量
   Eigen::Index N_1 = times.size();
 
@@ -49,14 +50,14 @@ void LinearJointAcceleration::computeParams_impl(
   Eigen::Index ndofs(nbVariables());
 
   // ---- 构造静态 F 和 g（不随网格点变化）----
-  Matrix &_F = F[0];
+  Matrix& _F = F[0];
   // 前 ndofs 行设置为单位矩阵：提取 v 的正分量用于上界约束
   _F.topRows(ndofs).setIdentity();
   // 后 ndofs 行先清零
   _F.bottomRows(ndofs).setZero();
   // 后 ndofs 行的对角线设为 -1：提取 v 的负分量用于下界约束
   _F.bottomRows(ndofs).diagonal().setConstant(-1);
-  Vector &_g = g[0];
+  Vector& _g = g[0];
   // 上界：q̈ <= upper
   _g.head(ndofs) = m_upper;
   // 下界取负：-q̈ <= -lower 等价于 q̈ >= lower
@@ -76,5 +77,5 @@ void LinearJointAcceleration::computeParams_impl(
   }
 }
 
-} // namespace constraint
-} // namespace toppra
+}  // namespace constraint
+}  // namespace toppra

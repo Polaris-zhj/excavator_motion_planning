@@ -1,16 +1,14 @@
 #ifndef TOPPRA_TOPPRA_HPP
 #define TOPPRA_TOPPRA_HPP
 
+#include <Eigen/Core>
+#include <Eigen/StdVector>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <vector>
 
-#include <Eigen/Core>
-#include <Eigen/StdVector>
-
-#include <toppra/export.hpp>
-#include <toppra/logging.hpp>
+#include "toppra/src/logging.hpp"
 
 // The TOPPRA_LOG* macros used to be compiled in or out depending on
 // -DTOPPRA_DEBUG_ON / -DTOPPRA_WARN_ON, which meant an already-built
@@ -63,13 +61,13 @@ namespace constraint {
 class LinearJointVelocity;
 class LinearJointAcceleration;
 class JointTorque;
-} // namespace constraint
+}  // namespace constraint
 
 class Solver;
 typedef std::shared_ptr<Solver> SolverPtr;
 namespace solver {
 class qpOASESWrapper;
-} // namespace solver
+}  // namespace solver
 
 class GeometricPath;
 typedef std::shared_ptr<GeometricPath> GeometricPathPtr;
@@ -78,6 +76,6 @@ class PathParametrizationAlgorithm;
 typedef std::shared_ptr<PathParametrizationAlgorithm>
     PathParametrizationAlgorithmPtr;
 
-} // namespace toppra
+}  // namespace toppra
 
 #endif

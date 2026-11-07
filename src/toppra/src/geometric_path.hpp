@@ -5,30 +5,30 @@
 #include <iostream>
 #include <ostream>
 #include <stdexcept>
-#include <toppra/algorithm.hpp>
-#include <toppra/toppra.hpp>
 #include <vector>
 
-namespace toppra {
+#include "toppra/src/algorithm.hpp"
+#include "toppra/src/toppra.hpp"
 
+namespace toppra {
 
 /**
  * \brief Abstract interface for geometric paths.
  */
 class GeometricPath {
-public:
-
-  GeometricPath()  = default;
+ public:
+  GeometricPath() = default;
 
   /**
    * Constructor of GeometricPath on vector spaces.
    */
-  GeometricPath(int nDof) : m_configSize(nDof), m_dof (nDof) {}
+  GeometricPath(int nDof) : m_configSize(nDof), m_dof(nDof) {}
 
   /**
    * Constructor of GeometricPath on non-vector spaces.
    */
-  GeometricPath(int configSize, int nDof) : m_configSize(configSize), m_dof (nDof) {}
+  GeometricPath(int configSize, int nDof)
+      : m_configSize(configSize), m_dof(nDof) {}
 
   /**
    * \brief Evaluate the path at given position.
@@ -40,11 +40,11 @@ public:
    *
    * Default implementation: Evaluation each point one-by-one.
    */
-  virtual Vectors eval(const Vector &positions, int order = 0) const;
+  virtual Vectors eval(const Vector& positions, int order = 0) const;
 
   /**
      \brief Generate gridpoints that sufficiently cover the given path.
-     
+
      This function operates in multiple passes through the geometric
      path from the start to the end point. In each pass, for each
      segment, the maximum interpolation error is estimated using the
@@ -56,7 +56,7 @@ public:
      the length of the segment. If the estimated error `err_{test}` is
      greater than the given threshold `max_err_threshold` then the
      segment is divided in two half.
-     
+
      Intuitively, at positions with higher curvature, there must be
      more points in order to improve approximation
      quality. Theoretically toppra performs the best when the proposed
@@ -72,33 +72,30 @@ public:
      @return The proposed gridpoints.
 
    */
-  Vector proposeGridpoints(double maxErrThreshold=1e-4, int maxIteration=100, double maxSegLength=0.05, int minNbPoints=100, Vector initialGridpoints = Vector()) const;
+  Vector proposeGridpoints(double maxErrThreshold = 1e-4,
+                           int maxIteration = 100, double maxSegLength = 0.05,
+                           int minNbPoints = 100,
+                           Vector initialGridpoints = Vector()) const;
 
   /**
    * \brief Dimension of the configuration space
    */
-  int configSize() const
-  {
-    return m_configSize;
-  }
+  int configSize() const { return m_configSize; }
 
   /**
    * \return the number of degrees-of-freedom of the path.
    */
-  int dof() const
-  {
-    return m_dof;
-  }
+  int dof() const { return m_dof; }
 
   /**
    * \brief Serialize path to stream.
    */
-  virtual void serialize(std::ostream &O) const {};
+  virtual void serialize(std::ostream& O) const {};
 
   /**
    * \brief Deserialize stream to construct path.
    */
-  virtual void deserialize(std::istream &I){};
+  virtual void deserialize(std::istream& I) {};
 
   /**
    * \brief Starting and ending path positions.
@@ -111,6 +108,6 @@ public:
   int m_configSize, m_dof;
 };
 
-} // namespace toppra
+}  // namespace toppra
 
 #endif

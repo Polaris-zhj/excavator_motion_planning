@@ -5,6 +5,8 @@ standard launch files for convenience. Use planner_class to select a planner
 plugin, for example:
   ros2 launch excavator_sim_viz demo.launch.py \
     planner_class:=excavator_planner_rrtstar/RrtStarPlanner
+Use time_parameterizer_class to switch between the baseline and TOPP-RA:
+  ros2 launch excavator_sim_viz demo.launch.py time_parameterizer_class:=toppra
 """
 
 import os
@@ -44,6 +46,9 @@ def generate_launch_description():
         ]),
         launch_arguments={
             "planner_class": LaunchConfiguration("planner_class"),
+            "time_parameterizer_class": LaunchConfiguration(
+                "time_parameterizer_class"),
+            "toppra_grid_points": LaunchConfiguration("toppra_grid_points"),
             "domain_id": LaunchConfiguration("domain_id"),
             "model": LaunchConfiguration("model"),
             "kinematics_backend": LaunchConfiguration("kinematics_backend"),
@@ -61,6 +66,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "planner_class",
             default_value="excavator_planning/LinearPlannerPlugin"),
+        DeclareLaunchArgument(
+            "time_parameterizer_class", default_value="simple",
+            description="time parameterization algorithm: simple or toppra"),
+        DeclareLaunchArgument(
+            "toppra_grid_points", default_value="200",
+            description="TOPP-RA discretization intervals (samples = N + 1)"),
         DeclareLaunchArgument(
             "kinematics_backend", default_value="urdf"),
         DeclareLaunchArgument(

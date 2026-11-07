@@ -1,8 +1,8 @@
 #ifndef TOPPRA_PARAMETRIZER_HPP
 #define TOPPRA_PARAMETRIZER_HPP
 
-#include <toppra/geometric_path.hpp>
-#include <toppra/toppra.hpp>
+#include "toppra/src/geometric_path.hpp"
+#include "toppra/src/toppra.hpp"
 
 namespace toppra {
 
@@ -24,12 +24,13 @@ class Parametrizer : public GeometricPath {
   /** Construct the parametrizer.
    *
    * \param path Input geometric path.
-   * \param gridpoints Shape (N+1,). Gridpoints of the parametrization, should be
-   * compatible with the path domain. \param vsquared Shape (N+1,). Path velocity
-   * squared, should have same shape as gridpoints as vsquared[i] corresponds to the
-   * velocity at gridpoints[i].
+   * \param gridpoints Shape (N+1,). Gridpoints of the parametrization, should
+   * be compatible with the path domain. \param vsquared Shape (N+1,). Path
+   * velocity squared, should have same shape as gridpoints as vsquared[i]
+   * corresponds to the velocity at gridpoints[i].
    */
-  Parametrizer(GeometricPathPtr path, const Vector &gridpoints, const Vector &vsquared);
+  Parametrizer(GeometricPathPtr path, const Vector& gridpoints,
+               const Vector& vsquared);
 
   /** \brief Evaluate the path at given position.
    */
@@ -37,7 +38,7 @@ class Parametrizer : public GeometricPath {
 
   /** \brief Evaluate the path at given positions (vector).
    */
-  Vectors eval(const Vector &, int order = 0) const override;
+  Vectors eval(const Vector&, int order = 0) const override;
 
   /** \brief Return the starting and ending path positions.
    */
@@ -66,7 +67,7 @@ class Parametrizer : public GeometricPath {
 
  private:
   /// To be overwriten by derived classes
-  virtual Vectors eval_impl(const Vector &, int order = 0) const = 0;
+  virtual Vectors eval_impl(const Vector&, int order = 0) const = 0;
   virtual bool validate_impl() const = 0;
   virtual Bound pathInterval_impl() const = 0;
 };

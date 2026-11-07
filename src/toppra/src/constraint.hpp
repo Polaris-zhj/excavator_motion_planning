@@ -2,7 +2,8 @@
 #define TOPPRA_CONSTRAINT_HPP
 
 #include <ostream>
-#include <toppra/toppra.hpp>
+
+#include "toppra/src/toppra.hpp"
 
 namespace toppra {
 /** Enum to mark different Discretization Scheme for LinearConstraint.
@@ -10,8 +11,8 @@ namespace toppra {
  *  \ref Interpolation if possible.
  * */
 enum DiscretizationType {
-  Collocation,   ///< smaller problem size, but lower accuracy.
-  Interpolation, ///< larger problem size, but higher accuracy.
+  Collocation,    ///< smaller problem size, but lower accuracy.
+  Interpolation,  ///< larger problem size, but higher accuracy.
 };
 
 /** \brief Abstract interface for constraints used in TOPPRA.
@@ -50,7 +51,7 @@ enum DiscretizationType {
  *
  * */
 class LinearConstraint {
-public:
+ public:
   DiscretizationType discretizationType() const { return m_discretizationType; }
 
   void discretizationType(DiscretizationType type);
@@ -80,8 +81,8 @@ public:
   /**
    * \param N number of gripoints (i.e. the number of intervals + 1)
    * */
-  void allocateParams(std::size_t N, Vectors &a, Vectors &b, Vectors &c,
-                      Matrices &F, Vectors &g, Bounds ubound, Bounds &xbound);
+  void allocateParams(std::size_t N, Vectors& a, Vectors& b, Vectors& c,
+                      Matrices& F, Vectors& g, Bounds ubound, Bounds& xbound);
 
   /** Compute numerical coefficients of the given constraint.
    *
@@ -104,15 +105,15 @@ public:
    * \todo check constness
    *
    * */
-  void computeParams(const GeometricPath &path, const Vector &gridpoints,
-                     Vectors &a, Vectors &b, Vectors &c, Matrices &F,
-                     Vectors &g, Bounds &ubound, Bounds &xbound);
+  void computeParams(const GeometricPath& path, const Vector& gridpoints,
+                     Vectors& a, Vectors& b, Vectors& c, Matrices& F,
+                     Vectors& g, Bounds& ubound, Bounds& xbound);
 
-  virtual std::ostream &print(std::ostream &os) const;
+  virtual std::ostream& print(std::ostream& os) const;
 
   virtual ~LinearConstraint() {}
 
-protected:
+ protected:
   /**
    * \param k number of inequality constraints.
    * \param m number of internal variable (i.e. dimention of \f$v\f$).
@@ -122,25 +123,29 @@ protected:
    * */
   LinearConstraint(Eigen::Index k, Eigen::Index m, bool constantF, bool uBound,
                    bool xBound)
-      : m_discretizationType(Interpolation), m_k(k), m_m(m),
-        m_constantF(constantF), m_hasUbounds(uBound), m_hasXbounds(xBound) {}
+      : m_discretizationType(Interpolation),
+        m_k(k),
+        m_m(m),
+        m_constantF(constantF),
+        m_hasUbounds(uBound),
+        m_hasXbounds(xBound) {}
 
-  virtual void computeParams_impl(const GeometricPath &path,
-                                  const Vector &gridpoints, Vectors &a,
-                                  Vectors &b, Vectors &c, Matrices &F,
-                                  Vectors &g, Bounds &ubound,
-                                  Bounds &xbound) = 0;
+  virtual void computeParams_impl(const GeometricPath& path,
+                                  const Vector& gridpoints, Vectors& a,
+                                  Vectors& b, Vectors& c, Matrices& F,
+                                  Vectors& g, Bounds& ubound,
+                                  Bounds& xbound) = 0;
 
   Eigen::Index m_k, m_m;
   DiscretizationType m_discretizationType;
   bool m_constantF, m_hasUbounds, m_hasXbounds;
-}; // class LinearConstraint
+};  // class LinearConstraint
 
 /// \brief write a LinearConstraint to an output stream
-inline std::ostream &operator<<(std::ostream &os, const LinearConstraint &lc) {
+inline std::ostream& operator<<(std::ostream& os, const LinearConstraint& lc) {
   return lc.print(os);
 }
 
-} // namespace toppra
+}  // namespace toppra
 
 #endif

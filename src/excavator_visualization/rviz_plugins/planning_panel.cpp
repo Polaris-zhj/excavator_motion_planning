@@ -1,15 +1,5 @@
 #include "planning_panel.hpp"
 
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <functional>
-#include <memory>
-#include <string>
-#include <utility>
-
 #include <QColor>
 #include <QFormLayout>
 #include <QFrame>
@@ -21,9 +11,17 @@
 #include <QSizePolicy>
 #include <QString>
 #include <QVBoxLayout>
-
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <functional>
+#include <memory>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
+#include <string>
+#include <utility>
 
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/vector3.hpp"
@@ -57,12 +55,11 @@ QPushButton* MakeActionButton(const QString& text, const QString& color) {
   button->setMinimumHeight(30);
   button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   button->setStyleSheet(
-      QString(
-          "QPushButton { background:%1; color:white; border:0; "
-          "border-radius:4px; padding:6px 8px; font-weight:600; }"
-          "QPushButton:hover { background:%2; }"
-          "QPushButton:pressed { background:%3; }"
-          "QPushButton:disabled { background:#4a4d52; color:#9aa0a6; }")
+      QString("QPushButton { background:%1; color:white; border:0; "
+              "border-radius:4px; padding:6px 8px; font-weight:600; }"
+              "QPushButton:hover { background:%2; }"
+              "QPushButton:pressed { background:%3; }"
+              "QPushButton:disabled { background:#4a4d52; color:#9aa0a6; }")
           .arg(color, QColor(color).lighter(115).name(),
                QColor(color).darker(115).name()));
   return button;
@@ -188,13 +185,12 @@ void ExcavatorPlanningPanel::BuildUi() {
     label->setObjectName("fieldLabel");
     return label;
   };
-  const auto add_labelled_field = [&make_field_label](
-                                      QGridLayout* grid, int label_row,
-                                      int field_row, int column,
-                                      const QString& text, QWidget* field) {
-    grid->addWidget(make_field_label(text), label_row, column);
-    grid->addWidget(field, field_row, column);
-  };
+  const auto add_labelled_field =
+      [&make_field_label](QGridLayout* grid, int label_row, int field_row,
+                          int column, const QString& text, QWidget* field) {
+        grid->addWidget(make_field_label(text), label_row, column);
+        grid->addWidget(field, field_row, column);
+      };
 
   // Joint-space goal: one stretchable column per joint.
   auto* target_group = new QGroupBox("Goal joint positions (rad)", content);
@@ -204,8 +200,7 @@ void ExcavatorPlanningPanel::BuildUi() {
   for (std::size_t index = 0; index < kDefaultJointNames.size(); ++index) {
     const int column = static_cast<int>(index);
     target_grid->setColumnStretch(column, 1);
-    const QString name =
-        QString::fromStdString(kDefaultJointNames[index]);
+    const QString name = QString::fromStdString(kDefaultJointNames[index]);
     auto* label = make_field_label(name);
     label->setToolTip(name);
     if (name.endsWith("_joint")) {
@@ -352,8 +347,8 @@ void ExcavatorPlanningPanel::onInitialize() {
     return;
   }
   node_ = abstraction->get_raw_node();
-  plan_client_ = rclcpp_action::create_client<PlanAction>(
-      node_, "/plan_trajectory");
+  plan_client_ =
+      rclcpp_action::create_client<PlanAction>(node_, "/plan_trajectory");
   execute_client_ = rclcpp_action::create_client<ExecuteAction>(
       node_, "/excavator/execute_trajectory");
   joint_state_subscription_ =
@@ -454,8 +449,7 @@ void ExcavatorPlanningPanel::RefreshUi() {
     start_pose_x_->setValue(start_pose_.position.x);
     start_pose_y_->setValue(start_pose_.position.y);
     start_pose_z_->setValue(start_pose_.position.z);
-    plan_status_ =
-        "start pose updated from the RViz interactive marker";
+    plan_status_ = "start pose updated from the RViz interactive marker";
     has_pending_start_pose_ = false;
   }
   if (has_pending_target_pose_) {
@@ -467,13 +461,12 @@ void ExcavatorPlanningPanel::RefreshUi() {
     const double y = pending_target_pose_.orientation.y;
     const double z = pending_target_pose_.orientation.z;
     const double w = pending_target_pose_.orientation.w;
-    const double roll = std::atan2(2.0 * (w * x + y * z),
-                                   1.0 - 2.0 * (x * x + y * y));
-    const double pitch_argument =
-        std::clamp(2.0 * (w * y - z * x), -1.0, 1.0);
+    const double roll =
+        std::atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+    const double pitch_argument = std::clamp(2.0 * (w * y - z * x), -1.0, 1.0);
     const double pitch = std::asin(pitch_argument);
-    const double yaw = std::atan2(2.0 * (w * z + x * y),
-                                  1.0 - 2.0 * (y * y + z * z));
+    const double yaw =
+        std::atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
     pose_roll_->setValue(roll);
     pose_pitch_->setValue(pitch);
     pose_yaw_->setValue(yaw);
@@ -489,10 +482,8 @@ void ExcavatorPlanningPanel::RefreshUi() {
   execution_status_label_->setToolTip(execution_status_label_->text());
   execution_progress_bar_->setValue(static_cast<int>(
       std::lround(std::clamp(execution_progress_, 0.0F, 1.0F) * 100.0F)));
-  scene_label_->setText(
-      QString::fromStdString("Scene: " +
-                             std::to_string(scene_manager_.Size()) +
-                             " obstacle(s)"));
+  scene_label_->setText(QString::fromStdString(
+      "Scene: " + std::to_string(scene_manager_.Size()) + " obstacle(s)"));
   plan_button_->setEnabled(has_joint_state_ && !plan_in_flight_);
   execute_button_->setEnabled(has_planned_trajectory_ && !execute_in_flight_);
 }
@@ -582,31 +573,30 @@ void ExcavatorPlanningPanel::SendPlanRequest() {
         std::lock_guard<std::mutex> lock(mutex_);
         plan_status_ = feedback->stage + ": " + feedback->message;
       };
-  options.result_callback =
-      [this](const PlanGoalHandle::WrappedResult& result) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        plan_in_flight_ = false;
-        if (result.code == rclcpp_action::ResultCode::SUCCEEDED &&
-            result.result->success) {
-          planned_trajectory_ = result.result->trajectory;
-          has_planned_trajectory_ = true;
-          plan_status_ =
-              "success: " +
-              std::to_string(planned_trajectory_.points.size()) +
-              " points; preview only, execution requires confirmation";
-          if (planned_trajectory_publisher_ &&
-              planned_trajectory_.points.size() >= 2) {
-            // Preview the result even when the planning server does not
-            // publish it (other PlannerInterface implementations).
-            planned_trajectory_publisher_->publish(planned_trajectory_);
-          }
-        } else {
-          plan_status_ = "planning failed: " +
-                         (result.result ? result.result->message
-                                        : std::string("no result"));
-          has_planned_trajectory_ = false;
-        }
-      };
+  options.result_callback = [this](
+                                const PlanGoalHandle::WrappedResult& result) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    plan_in_flight_ = false;
+    if (result.code == rclcpp_action::ResultCode::SUCCEEDED &&
+        result.result->success) {
+      planned_trajectory_ = result.result->trajectory;
+      has_planned_trajectory_ = true;
+      plan_status_ =
+          "success: " + std::to_string(planned_trajectory_.points.size()) +
+          " points; preview only, execution requires confirmation";
+      if (planned_trajectory_publisher_ &&
+          planned_trajectory_.points.size() >= 2) {
+        // Preview the result even when the planning server does not
+        // publish it (other PlannerInterface implementations).
+        planned_trajectory_publisher_->publish(planned_trajectory_);
+      }
+    } else {
+      plan_status_ =
+          "planning failed: " +
+          (result.result ? result.result->message : std::string("no result"));
+      has_planned_trajectory_ = false;
+    }
+  };
   plan_client_->async_send_goal(goal, options);
 }
 
@@ -708,8 +698,8 @@ void ExcavatorPlanningPanel::ApplyObstacleChange(bool update) {
   tramcar::planning::ValidationResult result;
   if (update) {
     result = scene_manager_.UpdateBox(id, pose, size);
-    if (!result.ok && result.message.find("does not exist") !=
-                            std::string::npos) {
+    if (!result.ok &&
+        result.message.find("does not exist") != std::string::npos) {
       result = scene_manager_.AddBox(id, pose, size);
     }
   } else {
@@ -737,8 +727,7 @@ void ExcavatorPlanningPanel::RefreshObstacleMarkers() {
     marker.name = box.id;
     marker.description = "Box obstacle " + box.id;
     marker.pose = box.pose;
-    marker.scale =
-        std::max({box.size.x, box.size.y, box.size.z}) * 1.4 + 0.2;
+    marker.scale = std::max({box.size.x, box.size.y, box.size.z}) * 1.4 + 0.2;
 
     visualization_msgs::msg::Marker visual;
     visual.type = visualization_msgs::msg::Marker::CUBE;
@@ -813,12 +802,12 @@ void ExcavatorPlanningPanel::RefreshObstacleMarkers() {
 }
 
 void ExcavatorPlanningPanel::RemoveObstacle() {
-  const auto result = scene_manager_.RemoveBox(
-      obstacle_id_edit_->text().toStdString());
+  const auto result =
+      scene_manager_.RemoveBox(obstacle_id_edit_->text().toStdString());
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    plan_status_ = result.ok ? "obstacle removed"
-                             : "scene error: " + result.message;
+    plan_status_ =
+        result.ok ? "obstacle removed" : "scene error: " + result.message;
   }
   PublishScene();
   RefreshObstacleMarkers();

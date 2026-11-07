@@ -59,21 +59,19 @@ JointPositions Interpolate(const JointPositions& start,
 
 void RrtStarPlanner::Configure(const PlannerSettings& settings) {
   settings_ = settings;
-  configured_ = settings_.joint_names.size() > 0 &&
-                settings_.joint_limits.size() ==
-                    settings_.joint_names.size() &&
-                std::isfinite(settings_.max_joint_step) &&
-                settings_.max_joint_step > 0.0 &&
-                std::isfinite(settings_.step_size) &&
-                settings_.step_size > 0.0 && settings_.max_iterations > 0 &&
-                std::isfinite(settings_.goal_bias) &&
-                settings_.goal_bias >= 0.0 && settings_.goal_bias <= 1.0 &&
-                std::isfinite(settings_.rewire_radius) &&
-                settings_.rewire_radius > 0.0 &&
-                std::isfinite(settings_.goal_tolerance) &&
-                settings_.goal_tolerance >= 0.0 &&
-                std::isfinite(settings_.collision_check_resolution) &&
-                settings_.collision_check_resolution > 0.0;
+  configured_ =
+      settings_.joint_names.size() > 0 &&
+      settings_.joint_limits.size() == settings_.joint_names.size() &&
+      std::isfinite(settings_.max_joint_step) &&
+      settings_.max_joint_step > 0.0 && std::isfinite(settings_.step_size) &&
+      settings_.step_size > 0.0 && settings_.max_iterations > 0 &&
+      std::isfinite(settings_.goal_bias) && settings_.goal_bias >= 0.0 &&
+      settings_.goal_bias <= 1.0 && std::isfinite(settings_.rewire_radius) &&
+      settings_.rewire_radius > 0.0 &&
+      std::isfinite(settings_.goal_tolerance) &&
+      settings_.goal_tolerance >= 0.0 &&
+      std::isfinite(settings_.collision_check_resolution) &&
+      settings_.collision_check_resolution > 0.0;
 }
 
 PlanningResponse RrtStarPlanner::Plan(const PlanningRequest& request) {
@@ -130,9 +128,8 @@ PlanningResponse RrtStarPlanner::Plan(const PlanningRequest& request) {
     const std::size_t steps = std::max<std::size_t>(
         1, static_cast<std::size_t>(std::ceil(distance / edge_resolution)));
     for (std::size_t step = 1; step <= steps; ++step) {
-      const JointPositions sample =
-          Interpolate(start, goal, static_cast<double>(step) /
-                                      static_cast<double>(steps));
+      const JointPositions sample = Interpolate(
+          start, goal, static_cast<double>(step) / static_cast<double>(steps));
       if (!state_valid(sample)) {
         return false;
       }
@@ -140,10 +137,10 @@ PlanningResponse RrtStarPlanner::Plan(const PlanningRequest& request) {
     return true;
   };
 
-  const double budget = std::isfinite(request.timeout_seconds) &&
-                                request.timeout_seconds > 0.0
-                            ? request.timeout_seconds
-                            : 1.0;
+  const double budget =
+      std::isfinite(request.timeout_seconds) && request.timeout_seconds > 0.0
+          ? request.timeout_seconds
+          : 1.0;
   const Clock::time_point deadline =
       Clock::now() + std::chrono::duration_cast<Clock::duration>(
                          std::chrono::duration<double>(budget));
@@ -220,8 +217,7 @@ PlanningResponse RrtStarPlanner::Plan(const PlanningRequest& request) {
   double best_goal_cost = std::numeric_limits<double>::infinity();
   std::size_t best_goal_parent = kNoParent;
   const auto try_connect_goal = [&](std::size_t index) {
-    const double distance =
-        Distance(nodes[index].positions, request.goal);
+    const double distance = Distance(nodes[index].positions, request.goal);
     if (distance > connect_radius) {
       return;
     }
@@ -304,8 +300,7 @@ PlanningResponse RrtStarPlanner::Plan(const PlanningRequest& request) {
     nodes.push_back({new_positions, best_parent, best_cost});
 
     for (const auto& near : near_nodes) {
-      if (near.first == best_parent ||
-          is_ancestor(near.first, new_index)) {
+      if (near.first == best_parent || is_ancestor(near.first, new_index)) {
         continue;
       }
       const double rewired_cost = best_cost + near.second;
@@ -365,15 +360,14 @@ PlanningResponse RrtStarPlanner::Plan(const PlanningRequest& request) {
   response.success = true;
   response.path = std::move(path);
   const double average_check_ms =
-      validity_checks > 0 ? 1000.0 * validity_seconds /
-                                static_cast<double>(validity_checks)
-                          : 0.0;
-  response.message = "RRT* path found: nodes=" +
-                     std::to_string(nodes.size()) + ", iterations=" +
-                     std::to_string(completed_iterations) + ", cost=" +
-                     std::to_string(best_goal_cost) + ", validity_checks=" +
-                     std::to_string(validity_checks) + ", avg_check_ms=" +
-                     std::to_string(average_check_ms);
+      validity_checks > 0
+          ? 1000.0 * validity_seconds / static_cast<double>(validity_checks)
+          : 0.0;
+  response.message = "RRT* path found: nodes=" + std::to_string(nodes.size()) +
+                     ", iterations=" + std::to_string(completed_iterations) +
+                     ", cost=" + std::to_string(best_goal_cost) +
+                     ", validity_checks=" + std::to_string(validity_checks) +
+                     ", avg_check_ms=" + std::to_string(average_check_ms);
   return response;
 }
 

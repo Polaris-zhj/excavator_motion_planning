@@ -1,11 +1,10 @@
 #include "kinematics/dh_kinematics_model.hpp"
 
+#include <Eigen/Geometry>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <limits>
-
-#include <Eigen/Geometry>
 
 namespace tramcar {
 namespace planning {
@@ -15,15 +14,15 @@ using Clock = std::chrono::steady_clock;
 
 Eigen::Isometry3d Rx(double angle) {
   Eigen::Isometry3d transform = Eigen::Isometry3d::Identity();
-  transform.linear() = Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitX())
-                           .toRotationMatrix();
+  transform.linear() =
+      Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitX()).toRotationMatrix();
   return transform;
 }
 
 Eigen::Isometry3d Rz(double angle) {
   Eigen::Isometry3d transform = Eigen::Isometry3d::Identity();
-  transform.linear() = Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitZ())
-                           .toRotationMatrix();
+  transform.linear() =
+      Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitZ()).toRotationMatrix();
   return transform;
 }
 
@@ -125,8 +124,8 @@ const std::vector<std::string>& DhKinematicsModel::joint_names() const {
   return joint_names_;
 }
 
-std::vector<std::pair<double, double>>
-DhKinematicsModel::GetPositionLimits() const {
+std::vector<std::pair<double, double>> DhKinematicsModel::GetPositionLimits()
+    const {
   std::vector<std::pair<double, double>> limits;
   limits.reserve(parameters_.joints.size());
   for (const DhJoint& joint : parameters_.joints) {
@@ -173,8 +172,8 @@ ValidationResult DhKinematicsModel::BuildFrames(
     const Eigen::Isometry3d pre =
         (*frames)[index] * Rx(joint.alpha_prev) * Tx(joint.a_prev);
     (*frames)[index + 1] =
-        pre * Rz(joint.theta_sign * positions[index] +
-                 joint.theta_offset) * Tz(joint.d);
+        pre * Rz(joint.theta_sign * positions[index] + joint.theta_offset) *
+        Tz(joint.d);
     if (!IsFinite((*frames)[index + 1])) {
       return {false, "DH forward kinematics produced a non-finite frame"};
     }
@@ -217,10 +216,9 @@ ValidationResult DhKinematicsModel::LinkPose(
     return {true, ""};
   }
   const auto offset = parameters_.link_offsets.find(link_name);
-  const Eigen::Isometry3d link_offset =
-      offset == parameters_.link_offsets.end()
-          ? Eigen::Isometry3d::Identity()
-          : offset->second;
+  const Eigen::Isometry3d link_offset = offset == parameters_.link_offsets.end()
+                                            ? Eigen::Isometry3d::Identity()
+                                            : offset->second;
   *transform = frames[static_cast<std::size_t>(count)] * link_offset;
   if (!IsFinite(*transform)) {
     return {false, "DH link pose is non-finite"};
@@ -270,17 +268,13 @@ ValidationResult DhKinematicsModel::GetJacobian(
   const std::size_t joints = parameters_.joints.size();
   jacobian->rows.assign(6, std::vector<double>(joints, 0.0));
   for (int index = 0; index < count; ++index) {
-    const DhJoint& joint =
-        parameters_.joints[static_cast<std::size_t>(index)];
-    const Eigen::Isometry3d pre =
-        frames[static_cast<std::size_t>(index)] *
-        Rx(joint.alpha_prev) * Tx(joint.a_prev);
+    const DhJoint& joint = parameters_.joints[static_cast<std::size_t>(index)];
+    const Eigen::Isometry3d pre = frames[static_cast<std::size_t>(index)] *
+                                  Rx(joint.alpha_prev) * Tx(joint.a_prev);
     const Eigen::Vector3d axis_line = pre.linear().col(2).normalized();
     const Eigen::Vector3d axis = joint.theta_sign * axis_line;
-    const Eigen::Vector3d point =
-        pre.translation() + axis_line * joint.d;
-    const Eigen::Vector3d linear =
-        axis.cross(target_position - point);
+    const Eigen::Vector3d point = pre.translation() + axis_line * joint.d;
+    const Eigen::Vector3d linear = axis.cross(target_position - point);
     jacobian->rows[0][static_cast<std::size_t>(index)] = linear.x();
     jacobian->rows[1][static_cast<std::size_t>(index)] = linear.y();
     jacobian->rows[2][static_cast<std::size_t>(index)] = linear.z();
@@ -293,8 +287,7 @@ ValidationResult DhKinematicsModel::GetJacobian(
 
 InverseKinematicsResult DhKinematicsModel::SolveIK(
     const Pose3& target_pose, const std::string& link_name,
-    const JointPositions& seed,
-    const InverseKinematicsOptions& options) const {
+    const JointPositions& seed, const InverseKinematicsOptions& options) const {
   InverseKinematicsResult result;
   if (!initialized_) {
     result.message = "DH model is not initialized";
@@ -310,8 +303,7 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
     return result;
   }
   const Eigen::Vector3d target_position(
-      target_pose.position.x, target_pose.position.y,
-      target_pose.position.z);
+      target_pose.position.x, target_pose.position.y, target_pose.position.z);
   Eigen::Quaterniond target_orientation(
       target_pose.orientation.w, target_pose.orientation.x,
       target_pose.orientation.y, target_pose.orientation.z);
@@ -319,9 +311,9 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
 
   JointPositions positions = seed;
   for (std::size_t index = 0; index < positions.size(); ++index) {
-    positions[index] = std::clamp(
-        positions[index], parameters_.joints[index].lower,
-        parameters_.joints[index].upper);
+    positions[index] =
+        std::clamp(positions[index], parameters_.joints[index].lower,
+                   parameters_.joints[index].upper);
   }
 
   const std::size_t max_iterations =
@@ -330,14 +322,12 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
       std::max(1.0e-9, options.position_tolerance);
   const double orientation_tolerance =
       std::max(1.0e-9, options.orientation_tolerance);
-  const double orientation_weight =
-      std::max(0.0, options.orientation_weight);
+  const double orientation_weight = std::max(0.0, options.orientation_weight);
   const double damping = std::max(1.0e-9, options.damping);
   const double max_step =
       options.max_joint_step > 0.0 ? options.max_joint_step : 0.2;
-  const auto deadline =
-      Clock::now() + std::chrono::duration<double>(
-                         std::max(0.001, options.time_budget_seconds));
+  const auto deadline = Clock::now() + std::chrono::duration<double>(std::max(
+                                           0.001, options.time_budget_seconds));
 
   const std::size_t joint_count = parameters_.joints.size();
   for (std::size_t iteration = 0; iteration < max_iterations; ++iteration) {
@@ -385,14 +375,12 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
       const DhJoint& joint =
           parameters_.joints[static_cast<std::size_t>(joint_index)];
       const Eigen::Isometry3d pre =
-          frames[static_cast<std::size_t>(joint_index)] *
-          Rx(joint.alpha_prev) * Tx(joint.a_prev);
+          frames[static_cast<std::size_t>(joint_index)] * Rx(joint.alpha_prev) *
+          Tx(joint.a_prev);
       const Eigen::Vector3d axis_line = pre.linear().col(2).normalized();
       const Eigen::Vector3d axis = joint.theta_sign * axis_line;
-      const Eigen::Vector3d point =
-          pre.translation() + axis_line * joint.d;
-      const Eigen::Vector3d linear =
-          axis.cross(target_position - point);
+      const Eigen::Vector3d point = pre.translation() + axis_line * joint.d;
+      const Eigen::Vector3d linear = axis.cross(target_position - point);
       jacobian.block<3, 1>(0, joint_index) = linear;
       jacobian.block<3, 1>(3, joint_index) = axis;
     }
@@ -403,8 +391,7 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
     error.tail<3>() = orientation_error * orientation_weight;
     const Eigen::MatrixXd normal =
         jacobian.transpose() * jacobian +
-        damping * damping * Eigen::MatrixXd::Identity(joint_count,
-                                                      joint_count);
+        damping * damping * Eigen::MatrixXd::Identity(joint_count, joint_count);
     const Eigen::VectorXd rhs = jacobian.transpose() * error;
     Eigen::VectorXd delta = normal.ldlt().solve(rhs);
     if (!delta.allFinite()) {
@@ -425,8 +412,7 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
       for (std::size_t index = 0; index < joint_count; ++index) {
         candidate[index] = std::clamp(
             positions[index] + step * delta[static_cast<Eigen::Index>(index)],
-            parameters_.joints[index].lower,
-            parameters_.joints[index].upper);
+            parameters_.joints[index].lower, parameters_.joints[index].upper);
       }
       Eigen::Isometry3d candidate_pose;
       const ValidationResult candidate_result =
@@ -437,14 +423,13 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
             (target_position - candidate_pose.translation()).norm();
         const double candidate_orientation_error =
             OrientationAngle(target_orientation, candidate_q);
-        const double current_cost =
-            position_error.squaredNorm() +
-            orientation_weight * orientation_weight *
-                orientation_angle * orientation_angle;
-        const double candidate_cost =
-            candidate_position * candidate_position +
-            orientation_weight * orientation_weight *
-                candidate_orientation_error * candidate_orientation_error;
+        const double current_cost = position_error.squaredNorm() +
+                                    orientation_weight * orientation_weight *
+                                        orientation_angle * orientation_angle;
+        const double candidate_cost = candidate_position * candidate_position +
+                                      orientation_weight * orientation_weight *
+                                          candidate_orientation_error *
+                                          candidate_orientation_error;
         if (candidate_cost < current_cost) {
           positions = std::move(candidate);
           improved = true;

@@ -1,6 +1,8 @@
+#include "toppra/src/parametrizer.hpp"
+
 #include <cassert>
-#include <toppra/parametrizer.hpp>
-#include <toppra/toppra.hpp>
+
+#include "toppra/src/toppra.hpp"
 
 namespace toppra {
 
@@ -16,7 +18,8 @@ Parametrizer::Parametrizer(GeometricPathPtr path, const Vector& gridpoints,
     assert(gridpoints[i + 1] > gridpoints[i]);
   }
 
-  assert(std::abs(path->pathInterval()[0] - gridpoints[0]) < TOPPRA_NEARLY_ZERO);
+  assert(std::abs(path->pathInterval()[0] - gridpoints[0]) <
+         TOPPRA_NEARLY_ZERO);
   assert(std::abs(path->pathInterval()[1] - gridpoints[gridpoints.size() - 1]) <
          TOPPRA_NEARLY_ZERO);
 }
