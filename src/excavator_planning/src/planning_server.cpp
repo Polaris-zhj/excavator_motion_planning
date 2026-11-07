@@ -323,6 +323,8 @@ class PlanningServer final : public rclcpp::Node {
           // the selected FK backend (URDF or DH).
           collision_config.model_format = "urdf";
           collision_config.model_source = robot_description;
+          collision_config.kinematics_reference_frame =
+              kinematics_backend == "dh" ? "world" : "base_link";
           const auto collision_init =
               collision_checker_->Initialize(collision_config,
                                              kinematics_.get());
