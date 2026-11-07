@@ -39,6 +39,10 @@ struct CollisionModelConfig {
   std::vector<std::string> joint_names;
   std::string model_source;
   std::string model_format{"urdf"};
+  // Reference frame returned by the selected KinematicsModel. The collision
+  // scene is expressed in the URDF root frame; a fixed transform is applied
+  // when these frames differ.
+  std::string kinematics_reference_frame{"base_link"};
 };
 
 // Planning and application code depends on this interface, not a concrete
