@@ -74,7 +74,10 @@ struct UrdfFclCollisionChecker::Impl {
       }
 
       std::string error;
-      const Eigen::Isometry3d transform = ToTransform(pose, &error);
+      const Eigen::Isometry3d reference_to_link =
+          ToTransform(pose, &error);
+      const Eigen::Isometry3d transform =
+          robot_model.root_to_reference_frame() * reference_to_link;
       if (!error.empty()) {
         return {false, error + ": " + link.link_name};
       }
@@ -221,8 +224,10 @@ ValidationResult UrdfFclCollisionChecker::Initialize(
     impl_->kinematics_model = kinematics_model;
   }
 
-  const ValidationResult model_result = impl_->robot_model.InitializeFromUrdf(
-      config.model_source, config.joint_names);
+  const ValidationResult model_result =
+      impl_->robot_model.InitializeFromUrdf(
+          config.model_source, config.joint_names,
+          config.kinematics_reference_frame);
   if (!model_result.ok) {
     impl_->kinematics_model = nullptr;
     impl_->owned_kinematics.reset();
