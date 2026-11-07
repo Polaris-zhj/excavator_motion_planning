@@ -143,7 +143,8 @@ TEST(UrdfFclCollisionCheckerTest, LoadsUrdfStlCollisionMesh) {
 
 TEST(UrdfFclCollisionCheckerTest, RejectsDuplicateJointNames) {
   UrdfFclCollisionChecker checker;
-  const auto result = checker.Initialize(kRobotUrdf, {"arm_joint", "arm_joint"});
+  const auto result =
+      checker.Initialize(kRobotUrdf, {"arm_joint", "arm_joint"});
   EXPECT_FALSE(result.ok);
 }
 
