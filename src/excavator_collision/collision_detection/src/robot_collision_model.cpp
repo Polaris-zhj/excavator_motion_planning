@@ -228,8 +228,11 @@ ValidationResult ConvertGeometry(const urdf::GeometrySharedPtr& source,
 
 ValidationResult RobotCollisionModel::InitializeFromUrdf(
     const std::string& urdf_xml,
-    const std::vector<std::string>& planning_joint_names) {
+    const std::vector<std::string>& planning_joint_names,
+    const std::string& reference_frame) {
   root_frame_.clear();
+  reference_frame_.clear();
+  root_to_reference_frame_.setIdentity();
   joint_names_.clear();
   links_.clear();
 
@@ -252,6 +255,46 @@ ValidationResult RobotCollisionModel::InitializeFromUrdf(
   const auto root = model.getRoot();
   if (!root) {
     return {false, "URDF has no root link"};
+  }
+  if (reference_frame.empty()) {
+    return {false, "kinematics reference frame must not be empty"};
+  }
+
+  // KinematicsModel poses are expressed in a declared reference frame. The
+  // planning scene uses the URDF root frame, so compute the fixed transform
+  // between these frames once when loading the collision model.
+  const auto reference_link = model.getLink(reference_frame);
+  if (!reference_link) {
+    return {false, "kinematics reference frame is missing from URDF: " +
+                       reference_frame};
+  }
+
+  std::vector<urdf::LinkConstSharedPtr> reference_chain;
+  auto current = reference_link;
+  while (current && current->name != root->name) {
+    const auto& joint = current->parent_joint;
+    if (!joint || joint->type != urdf::Joint::FIXED) {
+      return {false, "kinematics reference frame must be connected to the "
+                     "URDF root by fixed joints: " + reference_frame};
+    }
+    reference_chain.push_back(current);
+    current = model.getLink(joint->parent_link_name);
+  }
+  if (!current) {
+    return {false, "kinematics reference frame is not connected to URDF root: " +
+                       reference_frame};
+  }
+
+  Eigen::Isometry3d root_to_reference =
+      Eigen::Isometry3d::Identity();
+  for (auto iter = reference_chain.rbegin(); iter != reference_chain.rend();
+       ++iter) {
+    root_to_reference =
+        root_to_reference *
+        ToTransform((*iter)->parent_joint->parent_to_joint_origin_transform);
+  }
+  if (!IsFinite(root_to_reference)) {
+    return {false, "root-to-reference transform is non-finite"};
   }
 
   for (const std::string& joint_name : planning_joint_names) {
@@ -320,6 +363,8 @@ ValidationResult RobotCollisionModel::InitializeFromUrdf(
   }
 
   root_frame_ = root->name;
+  reference_frame_ = reference_frame;
+  root_to_reference_frame_ = root_to_reference;
   joint_names_ = planning_joint_names;
   return {true, ""};
 }
