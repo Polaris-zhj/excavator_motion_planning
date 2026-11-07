@@ -319,13 +319,13 @@ class PlanningServer final : public rclcpp::Node {
         } else {
           CollisionModelConfig collision_config;
           collision_config.joint_names = joint_names_;
-          collision_config.model_format =
-              collision_backend == "dh_fcl" ? "dh" : "urdf";
-          collision_config.model_source =
-              collision_config.model_format == "urdf" ? robot_description
-                                                      : dh_parameters_file;
+          // Collision geometry is described by URDF independently of
+          // the selected FK backend (URDF or DH).
+          collision_config.model_format = "urdf";
+          collision_config.model_source = robot_description;
           const auto collision_init =
-              collision_checker_->Initialize(collision_config);
+              collision_checker_->Initialize(collision_config,
+                                             kinematics_.get());
           if (!collision_init.ok) {
             RCLCPP_ERROR(get_logger(),
                          "Failed to initialize collision checker: %s",
