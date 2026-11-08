@@ -11,12 +11,12 @@
 
 第一版目标：
 
-1. 从 URDF 中加载机器人碰撞几何体，包括 Box、Sphere、Cylinder 和 STL Mesh。
-2. 与运动学模块解耦，通过统一的 `KinematicsModel` 获取连杆位姿。
+1. 从 YAML 中加载机器人碰撞几何体，包括 Box、Sphere、Cylinder、Capsule 和 STL Mesh；碰撞模块不再解析 URDF。
+2. 与运动学模块解耦，通过统一的 `KinematicsModel` 获取连杆位姿；规划默认使用 Modified-DH 运动学。
 3. 检测机器人自碰撞和机器人与环境障碍物之间的碰撞。
 4. 支持单个关节状态、离散关节路径和关节轨迹检测。
 5. 支持查询机器人与指定障碍物之间的最小距离。
-6. 使用 FCL 作为第一版第三方碰撞计算后端，但不让 FCL 类型进入规划层的公共接口。
+6. 将 FCL 0.7.0 的核心算法移植到 `collision_detection/third_library/fcl/` 并构建为本地静态库，避免运行时依赖系统 FCL，同时不让 FCL 类型进入规划层的公共接口。
 7. 为后续自研碰撞算法保留替换入口，通过工厂注册和配置选择后端，不修改规划器的调用逻辑。
 
 第一版不承担液压动力学、接触力计算、连续时间碰撞证明或感知算法本身。碰撞检测只使用传入的几何描述和位姿。
@@ -29,25 +29,26 @@
 flowchart TD
     PS[PlanningServer] --> Factory[CollisionCheckerFactory]
     Factory --> CI[CollisionChecker interface]
-    CI --> Impl[UrdfFclCollisionChecker]
-    Impl --> KM[KinematicsModel]
+    CI --> Impl[FclCollisionChecker]
+    Impl --> KM[KinematicsModel / DhKinematicsModel]
     Impl --> RCM[RobotCollisionModel]
     Impl --> FCM[FclCollisionModel]
+    YAML[robot_collision_model.yaml] --> RCM
     RCM -->|项目自有几何模型| FCM
     KM -->|各 link 的 FK 位姿| FCM
     Scene[PlanningScene] --> FCM
-    FCM --> FCL[FCL library]
+    FCM --> FCL[本地 vendored FCL]
     FCL --> Result[CollisionCheckResult / DistanceResult]
     Result --> PS
 ```
 
 这里有三个必须保持的边界：
 
-- **KinematicsModel**：只负责运动学计算，输入关节位置，输出指定连杆的位姿。
-- **RobotCollisionModel**：只负责描述机器人碰撞几何体、几何体相对连杆的固定局部位姿以及连杆关系，不计算 FK，也不包含 FCL 类型。
+- **KinematicsModel**：只负责运动学计算，输入关节位置，输出指定连杆的位姿。规划默认使用 Modified-DH 实现。
+- **RobotCollisionModel**：从 YAML 读取机器人碰撞几何体、几何体相对连杆的固定局部位姿以及连杆关系，不计算 FK，也不包含 FCL 类型。
 - **FclCollisionModel**：负责把项目自己的碰撞几何描述转换为 FCL 几何对象，并执行 FCL 碰撞/距离查询。
 
-`UrdfFclCollisionChecker` 是三者之间的协调层。规划服务只依赖 `CollisionChecker` 抽象接口，不直接调用 FCL。
+`FclCollisionChecker` 是三者之间的协调层。规划服务只依赖 `CollisionChecker` 抽象接口，不直接调用 FCL。
 
 ### 2.2 目录结构
 
@@ -56,20 +57,23 @@ src/excavator_collision/
 ├── include/excavator_collision/
 │   ├── collision_checker_interface.hpp
 │   ├── collision_checker.hpp
-│   └── collision_checker_factory.hpp
+│   ├── collision_checker_factory.hpp
+│   └── robot_collision_model.hpp
 ├── collision_detection/
 │   ├── README.md
-│   ├── include/excavator_collision/internal/
-│   │   └── robot_collision_model.hpp
 │   ├── src/
 │   │   ├── collision_checker.cpp
 │   │   └── robot_collision_model.cpp
 │   └── third_library/
-│       └── fcl/
-│           ├── fcl_collision_model.hpp
-│           └── fcl_collision_model.cpp
+│       ├── fcl_collision_model.hpp   # 项目 FCL 适配层
+│       ├── fcl_collision_model.cpp
+│       └── fcl/                      # 移植的 FCL 0.7.0 上游源码与 CMake
+│           ├── include/fcl/          # 上游公共头文件
+│           ├── src/                  # broadphase / narrowphase / geometry / math
+│           ├── CMakeLists.txt        # 构建静态库 excavator_fcl
+│           ├── LICENSE
+│           └── README.md
 ├── src/
-│   ├── collision_checker.cpp
 │   └── collision_checker_factory.cpp
 └── test/
     ├── collision_checker_test.cpp
@@ -82,14 +86,17 @@ src/excavator_collision/
 | 文件/目录 | 职责 |
 | --- | --- |
 | `collision_checker_interface.hpp` | 定义项目级碰撞查询接口、输入配置和结果类型 |
-| `collision_checker.hpp` | 当前 URDF + FCL 后端的公开声明 |
+| `collision_checker.hpp` | YAML + 本地 FCL 后端的公开声明 |
 | `collision_checker_factory.hpp/.cpp` | 注册并创建碰撞检测后端 |
-| `RobotCollisionModel` | 从 URDF 加载机器人碰撞几何描述 |
+| `RobotCollisionModel` | 从 YAML 加载机器人碰撞几何描述 |
 | `collision_detection/src/collision_checker.cpp` | 调用 FK、组织碰撞查询、路径离散采样 |
-| `third_library/fcl` | FCL 类型转换、FCL 对象构造、碰撞和距离计算 |
+| `third_library/fcl_collision_model.*` | FCL 类型转换、FCL 对象构造、碰撞和距离计算 |
+| `third_library/fcl/` | 移植的 FCL 0.7.0 核心算法，构建为 `excavator_fcl` 静态库并私有链接 |
 | `test/` | 碰撞检测、工厂注册和性能测试 |
 
-`third_library/fcl` 是 FCL 适配代码存放位置，不是 FCL 上游源代码副本。FCL 仍通过系统依赖 `libfcl-dev` 引入。
+`third_library/fcl_collision_model.*` 是项目自己的 FCL 适配代码；
+`third_library/fcl/` 是移植的上游 FCL 源码，不要求系统安装 `libfcl-dev`。
+FCL 静态库只链接进 `libexcavator_collision.so`，公共头文件不暴露 FCL 类型。
 
 ## 3. 模型职责与坐标变换
 
@@ -124,13 +131,41 @@ collision_checker_->Initialize(collision_config, kinematics_.get());
 `RobotCollisionModel` 是项目自己的机器人碰撞模型，核心数据包括：
 
 - `link_name`：碰撞几何体所属连杆名称；
-- `parent_link_name`：URDF 中该连杆的直接父连杆；
+- `parent_link_name`：可选的直接父连杆，仅用于自碰撞相邻连杆过滤；
 - `CollisionGeometry`：项目自己的几何类型和参数；
 - `link_to_collision`：碰撞几何体相对所属连杆的固定局部位姿。
 
 模型层不包含 `fcl::CollisionObject`、`fcl::CollisionGeometry` 等类型。它只描述“机器人由哪些几何体构成，以及这些几何体固定在什么位置”。
 
-第一版由 `InitializeFromUrdf()` 解析 URDF 的 collision 元素。若某个带碰撞几何体的连杆依赖未配置的可动关节，初始化会报错，避免把该关节静默固定在零位。
+第一版由 `InitializeFromYaml()` 解析机器人碰撞 YAML（默认
+`excavator_collision.yaml`），不再读取 URDF：
+
+```yaml
+robot:
+  name: excavator
+  root_frame: base_link
+
+links:
+  - link_name: boom_link
+    parent_link_name: swing_link
+    geometries:
+      - name: boom_body
+        type: mesh
+        resource: "package://excavator_description/meshes/pjjq03.STL"
+        scale: [1.0, 1.0, 1.0]
+        origin:
+          xyz: [0.0, 0.0, 0.0]
+          rpy: [0.0, 0.0, 0.0]
+```
+
+支持 `box`、`sphere`、`cylinder`、`capsule` 和 `mesh`。Mesh 资源支持
+`package://`、绝对路径和相对 YAML 文件目录的路径，当前解析 ASCII/Binary STL。
+默认挖机配置位于 `excavator_description/config/excavator_collision.yaml`，其几何
+原点表达在**物理连杆坐标系**中，与 URDF/RViz 显示的连杆坐标系一致。
+
+> 注意：`excavator_dh.yaml` 必须使 Modified-DH 正运动学输出与 URDF 物理连杆位姿
+> 一致（`dh_kinematics_test` 会校验）。若 DH 参数存在平移偏差，碰撞几何会与
+> RViz 中可见的挖机错位，拖动障碍物到挖机表面时可能无法触发碰撞。
 
 ### 3.3 FclCollisionModel
 
@@ -147,27 +182,34 @@ FCL 对象不暴露给 Planner 或其他业务层。
 
 ### 3.4 坐标系约定
 
-当前挖机 URDF 的根坐标系为 `world`，运动学查询返回的连杆位姿以 `base_link` 为参考系。两者之间有固定变换：
+脱离 URDF 后不再存在隐式 frame 树。YAML 的 `robot.root_frame` 同时定义：
 
-```text
-T_world_link = T_world_base_link * T_base_link_link
+- `KinematicsModel::GetLinkPose()` 返回位姿的参考坐标系；
+- `PlanningScene` 中环境障碍物位姿的参考坐标系；
+- 碰撞几何体最终位姿的根坐标系。
+
+当前 DH 与 URDF 运动学后端都输出 `base_link` 下的位姿，因此默认：
+
+```yaml
+robot:
+  root_frame: base_link
 ```
 
 机器人碰撞几何体的最终位姿为：
 
 ```text
-T_world_collision = T_world_link * T_link_collision
+T_root_collision = T_root_link * T_link_collision
 ```
 
 其中：
 
-- `T_world_base_link`：从 URDF 固定关节链解析得到，在模型初始化时计算；
-- `T_base_link_link`：由当前 `KinematicsModel::GetLinkPose()` 返回；
-- `T_link_collision`：来自 URDF collision 元素的 origin。
+- `T_root_link`：由当前 `KinematicsModel::GetLinkPose()` 返回；
+- `T_link_collision`：来自 YAML geometry 的 origin。
 
-当前 `CollisionModelConfig::kinematics_reference_frame` 默认是 `base_link`。初始化时，模型层会检查该 frame 是否通过固定关节连接到 URDF 根坐标系，并解析固定变换。当前不支持 reference frame 与 URDF 根坐标系之间存在可动关节的情况。
-
-环境障碍物位姿必须与规划场景的根坐标系一致。当前模块不主动查询 TF，也不会自动执行 frame 转换；`PlanningScene.header.frame_id` 为空时允许直接使用，否则必须与 URDF 根 frame 一致。
+`CollisionModelConfig::kinematics_reference_frame` 默认是 `base_link`。初始化时若
+YAML `root_frame` 与之不一致会直接报错，而不是猜测或执行隐式坐标变换。当前模块不主动
+查询 TF；`PlanningScene.header.frame_id` 为空时允许直接使用，否则必须与 `root_frame`
+一致。
 
 ## 4. 初始化与运行流程
 
@@ -177,16 +219,16 @@ T_world_collision = T_world_link * T_link_collision
 sequenceDiagram
     participant P as PlanningServer
     participant F as CollisionCheckerFactory
-    participant C as UrdfFclCollisionChecker
+    participant C as FclCollisionChecker
     participant K as KinematicsModel
     participant R as RobotCollisionModel
     participant A as FclCollisionModel
 
-    P->>K: 初始化 URDF 或 DH 运动学
+    P->>K: 初始化 DH 运动学（或 URDF）
     P->>F: Create(collision_backend)
     F-->>P: CollisionChecker
     P->>C: Initialize(config, KinematicsModel*)
-    C->>R: InitializeFromUrdf(URDF, joints, reference_frame)
+    C->>R: InitializeFromYaml(YAML, joints, reference_frame)
     R-->>C: 项目自有几何模型
     C->>A: Initialize(RobotCollisionModel)
     A-->>C: FCL 几何资源构建完成
@@ -197,21 +239,24 @@ sequenceDiagram
 
 | 配置项 | 当前值/用途 |
 | --- | --- |
-| `collision_backend` | 默认 `urdf_fcl`，选择碰撞算法实现 |
-| `model_format` | 当前为 `urdf`，表示碰撞几何来源是 URDF |
-| `model_source` | 由 launch 中 Xacro 展开的 URDF XML |
+| `collision_backend` | 默认 `fcl`，选择碰撞算法实现 |
+| `model_format` | 当前为 `yaml`，表示碰撞几何来源是 YAML |
+| `model_source` | 机器人碰撞 YAML 文本 |
+| `model_base_directory` | 解析相对 mesh 路径时使用 |
 | `joint_names` | 当前规划使用的主动关节顺序 |
-| `kinematics_reference_frame` | 当前为 `base_link`，声明 FK 位姿的参考坐标系 |
-| `KinematicsModel*` | 当前选择的 FK 实现，供碰撞检查时查询连杆位姿 |
+| `kinematics_reference_frame` | 当前为 `base_link`，必须与 YAML `root_frame` 一致 |
+| `KinematicsModel*` | 当前选择的 FK 实现（默认 DH），碰撞检查时查询连杆位姿 |
 
-注意：即使启动时选择 `kinematics_backend:=dh`，机器人碰撞几何仍从实际 URDF 加载；DH 只负责 FK。碰撞模型和运动学模型保持独立，不要求为 DH 再生成一套 FCL 几何模型。
+规划默认组合为 `kinematics_backend:=dh`、`collision_backend:=fcl`。碰撞几何完全由
+YAML 提供，DH 运动学提供连杆位姿；碰撞后端不再需要或解析 URDF。URDF 仍用于
+robot_state_publisher、RViz 和轨迹控制器中的可视化运动学。
 
 ### 4.2 单状态碰撞查询
 
 ```mermaid
 sequenceDiagram
     participant Caller as Planner / Caller
-    participant C as UrdfFclCollisionChecker
+    participant C as FclCollisionChecker
     participant K as KinematicsModel
     participant A as FclCollisionModel
     participant F as FCL
@@ -286,7 +331,8 @@ N = max(1, ceil(max_i(abs(q_end[i] - q_start[i])) / max_joint_step))
 2. 直接父子连杆配对；
 3. 用户通过 `allowed_collision_pairs` 显式配置的连杆配对。
 
-父子关系来自 URDF 连杆树。允许碰撞对按无序连杆对处理，因此 `A:B` 与 `B:A` 等价。
+父子关系来自 YAML 的 `parent_link_name`（可选）。允许碰撞对按无序连杆对处理，因此
+`A:B` 与 `B:A` 等价。
 
 允许碰撞对只应排除结构上明确不需要检测的组合。不要为了让规划通过而随意增加过滤项，否则可能把真实的自碰撞隐藏掉。
 
@@ -313,16 +359,18 @@ allowed_collision_pairs:
 
 ### 7.1 机器人碰撞模型
 
-从 URDF collision 元素加载：
+从 YAML `links[].geometries[]` 加载：
 
-| URDF 类型 | 项目模型 | FCL 表示 |
-| --- | --- | --- |
-| `box` | `kBox` | `fcl::Boxd` |
-| `sphere` | `kSphere` | `fcl::Sphered` |
-| `cylinder` | `kCylinder` | `fcl::Cylinderd` |
-| `mesh` | `kTriangleMesh` | `fcl::BVHModel<fcl::OBBRSSd>` |
+| YAML 类型 | 参数 | 项目模型 | FCL 表示 |
+| --- | --- | --- | --- |
+| `box` | `size: [x,y,z]` | `kBox` | `fcl::Boxd` |
+| `sphere` | `radius` | `kSphere` | `fcl::Sphered` |
+| `cylinder` | `radius`, `length` | `kCylinder` | `fcl::Cylinderd` |
+| `capsule` | `radius`, `length` | `kCapsule` | `fcl::Capsuled` |
+| `mesh` | `resource`, `scale` | `kTriangleMesh` | `fcl::BVHModel<fcl::OBBRSSd>` |
 
-当前 Mesh 文件加载器支持 URDF 引用的 ASCII STL 和 Binary STL；支持 `package://` URI 和文件系统路径。当前并没有实现 DAE、OBJ 等其它网格格式的解析。
+当前 Mesh 文件加载器支持 ASCII STL 和 Binary STL；支持 `package://` URI、绝对路径和
+相对 YAML 文件目录的路径。当前没有实现 DAE、OBJ 等其它网格格式的解析。
 
 ### 7.2 环境障碍物模型
 
@@ -357,7 +405,8 @@ CollisionObject[] objects
 
 规划请求携带非空对象或非空 frame 时，使用请求中的场景；请求未携带场景内容时，规划服务尝试使用最近保存的完整场景快照。
 
-场景的障碍物 pose 必须已在 URDF 根 frame（当前为 `world`）下表达。当前没有自动 TF 变换步骤，感知或场景适配层需要先完成坐标变换。
+场景的障碍物 pose 必须已在碰撞模型 `root_frame`（当前为 `base_link`）下表达。当前没有
+自动 TF 变换步骤，感知或场景适配层需要先完成坐标变换。
 
 ## 8. 点云、OctoMap 与动态障碍物的后续接入
 
@@ -413,7 +462,7 @@ FCL 适配层可以继续扩展更多几何数据结构；但环境输入格式�
 当前实现的工厂注册表是单例，但 `Create()` 每次返回独立的 `std::unique_ptr`，不会缓存碰撞检查器实例。当前已注册的类型只有：
 
 ```yaml
-collision_backend: urdf_fcl
+collision_backend: fcl
 ```
 
 ### 10.2 新增自研后端
@@ -451,13 +500,13 @@ collision_backend: custom_collision
 
 | 测试文件 | 覆盖内容 |
 | --- | --- |
-| `collision_checker_test.cpp` | 环境碰撞、自碰撞、允许碰撞对、STL 加载、路径中间采样、FK 注入、坐标系变换、距离查询 |
+| `collision_checker_test.cpp` | 环境碰撞、自碰撞、允许碰撞对、STL 加载、路径中间采样、DH 运动学 + 挖机 YAML、frame 校验、距离查询 |
 | `collision_checker_factory_test.cpp` | 默认后端注册、未知类型、运行时注册 |
 | `collision_benchmark_test.cpp` | 可选的完整挖机模型性能基准 |
 
 建议后续继续补充：
 
-- 不支持 URDF 几何、损坏网格、错误维度和非法四元数的失败测试；
+- 不支持的 YAML 几何类型、损坏网格、错误维度和非法四元数的失败测试；
 - 不完整规划关节组和 FK 缺失连杆的初始化/查询失败测试；
 - 多碰撞几何体、多个障碍物和重复 ID 测试；
 - 不同 FK 后端在相同关节状态下的碰撞结果一致性测试；
@@ -474,18 +523,52 @@ colcon test --packages-select excavator_collision
 colcon test-result --verbose
 ```
 
+### 11.1 可视化交互碰撞测试
+
+`demo.launch.py` 默认启动 `collision_visual_test_node` 和 RViz 规划面板，可直接做交互测试：
+
+```bash
+ros2 launch excavator_sim_viz demo.launch.py
+# 关闭交互测试节点：
+ros2 launch excavator_sim_viz demo.launch.py start_collision_test:=false
+```
+
+操作步骤：
+
+1. 在 RViz 左侧 `Excavator Planning` 面板的 **Box obstacle** 区域设置 id、x/y/z、yaw 和尺寸，点击 `Add / update`；场景通过 `/excavator/scene` 发布。
+2. RViz 中出现红色半透明障碍物盒子（交互标记命名空间 `/excavator_obstacle`），按住并拖动即可任意移动障碍物；规划面板会在每帧拖动时发布完整场景快照。
+3. 拖动青色小球 `bucket_tip_drag`（交互标记命名空间 `/excavator_collision_test`）。节点对 `bucket_tip` 做位置优先 IK，通过 `/excavator/manual_joint_state` 让轨迹控制器进入手动跟随模式，挖机爪可在工作空间内任意移动。
+4. 碰撞检测节点以 20 Hz 检查当前 `/joint_states` 与 `/excavator/scene`：
+   - 发生自碰撞或环境碰撞时，YAML 中所有机器人碰撞几何体与碰撞障碍物按**亮红色**显示；
+   - 碰撞连杆以更高不透明度突出，并在其上方显示 `COLLISION: ...` 文本；
+   - 碰撞解除后发布 `DELETEALL`，红色标记自动清除。
+
+相关话题：
+
+| 话题 | 方向 | 说明 |
+| --- | --- | --- |
+| `/excavator/scene` | 规划面板 → 碰撞测试节点 | 完整障碍物场景（`base_link`） |
+| `/excavator/collision_test_markers` | 碰撞测试节点 → RViz | 亮红碰撞几何与文本标记（与规划服务的 `/excavator/collision_result` 分开） |
+| `/excavator/manual_joint_state` | 碰撞测试节点 → 轨迹控制器 | 手动拖动 IK 关节目标 |
+| `/excavator/manual_target_pose` | 外部 → 碰撞测试节点 | 可选，`PoseStamped` 自动化/脚本驱动 |
+
+手动拖动会取消正在执行的轨迹。`manual_control_enabled`（轨迹控制器参数）可关闭该行为。碰撞测试节点同样适用于无界面验证：向 `/excavator/manual_target_pose` 发布 `base_link` 下的目标位姿，并观察 `/excavator/manual_joint_state` 与 `/excavator/collision_test_markers`。
+
 ## 12. 当前实现边界与后续优先级
 
 | 能力 | 当前状态 |
 | --- | --- |
-| URDF 机器人碰撞模型加载 | 已实现 |
-| Box / Sphere / Cylinder / STL Mesh 机器人几何 | 已实现 |
-| URDF FK / Modified-DH FK 注入 | 已接入统一 FK 接口 |
+| YAML 机器人碰撞模型加载（脱离 URDF） | 已实现 |
+| Box / Sphere / Cylinder / Capsule / STL Mesh 机器人几何 | 已实现 |
+| 本地移植 FCL 0.7.0（无系统 libfcl 依赖） | 已实现 |
+| URDF FK / Modified-DH FK 注入 | 已接入统一 FK 接口，规划默认 DH |
 | 自碰撞与允许碰撞对过滤 | 已实现 |
 | Box / Sphere / Cylinder 环境障碍物 | 已实现 |
 | 单状态、离散路径和轨迹碰撞查询 | 已实现 |
 | 指定障碍物路径查询 | 已实现 |
 | 指定障碍物距离查询 | 已实现 |
+| RViz 可拖动障碍物 + 挖机爪手动 IK | 已实现（`collision_visual_test_node`） |
+| 实时碰撞亮红可视化 | 已实现 |
 | OctoMap / OcTree | 未实现 |
 | 原始点云和体素地图输入 | 未实现 |
 | 环境三角网格 | 未实现 |
@@ -507,10 +590,14 @@ colcon test-result --verbose
 - 碰撞检测接口：`src/excavator_collision/include/excavator_collision/collision_checker_interface.hpp`
 - 当前 FCL 检查器：`src/excavator_collision/include/excavator_collision/collision_checker.hpp`
 - 工厂：`src/excavator_collision/include/excavator_collision/collision_checker_factory.hpp`
-- 机器人碰撞模型：`src/excavator_collision/collision_detection/include/excavator_collision/internal/robot_collision_model.hpp`
+- 机器人碰撞模型：`src/excavator_collision/include/excavator_collision/robot_collision_model.hpp`
 - 碰撞检查协调层：`src/excavator_collision/collision_detection/src/collision_checker.cpp`
-- URDF 碰撞模型解析：`src/excavator_collision/collision_detection/src/robot_collision_model.cpp`
-- FCL 适配实现：`src/excavator_collision/collision_detection/third_library/fcl/`
+- YAML 碰撞模型解析：`src/excavator_collision/collision_detection/src/robot_collision_model.cpp`
+- 默认挖机碰撞 YAML：`src/excavator_description/config/excavator_collision.yaml`
+- FCL 适配实现：`src/excavator_collision/collision_detection/third_library/fcl_collision_model.*`
+- 本地 FCL 源码与 CMake：`src/excavator_collision/collision_detection/third_library/fcl/`
 - 规划服务接入：`src/excavator_planning/src/planning_server.cpp`
+- 交互碰撞测试节点：`src/excavator_visualization/src/collision_visual_test_node.cpp`
+- 手动拖动接入：`src/excavator_sim_viz/src/trajectory_controller_node.cpp`
 - 当前环境消息：`src/excavator_interfaces/msg/CollisionObject.msg`、`PlanningScene.msg`
 - 模块实现说明：`src/excavator_collision/collision_detection/README.md`

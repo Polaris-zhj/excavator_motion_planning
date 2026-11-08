@@ -279,7 +279,7 @@ void ExcavatorPlanningPanel::BuildUi() {
   layout->addWidget(pose_group);
 
   // Box obstacle editor: 4 responsive columns.
-  auto* obstacle_group = new QGroupBox("Box obstacle (world frame)", content);
+  auto* obstacle_group = new QGroupBox("Box obstacle (base_link frame)", content);
   auto* grid = new QGridLayout(obstacle_group);
   grid->setHorizontalSpacing(6);
   grid->setVerticalSpacing(2);

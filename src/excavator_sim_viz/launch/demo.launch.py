@@ -35,7 +35,10 @@ def generate_launch_description():
             "domain_id": LaunchConfiguration("domain_id"),
             "model": LaunchConfiguration("model"),
             "collision_backend": LaunchConfiguration("collision_backend"),
+            "collision_model_file": LaunchConfiguration("collision_model_file"),
             "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
+            "start_collision_test": LaunchConfiguration(
+                "start_collision_test"),
         }.items())
     planning = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -53,6 +56,7 @@ def generate_launch_description():
             "model": LaunchConfiguration("model"),
             "kinematics_backend": LaunchConfiguration("kinematics_backend"),
             "collision_backend": LaunchConfiguration("collision_backend"),
+            "collision_model_file": LaunchConfiguration("collision_model_file"),
             "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
         }.items())
     return LaunchDescription([
@@ -73,14 +77,23 @@ def generate_launch_description():
             "toppra_grid_points", default_value="200",
             description="TOPP-RA discretization intervals (samples = N + 1)"),
         DeclareLaunchArgument(
-            "kinematics_backend", default_value="urdf"),
+            "kinematics_backend", default_value="dh"),
         DeclareLaunchArgument(
-            "collision_backend", default_value="urdf_fcl"),
+            "collision_backend", default_value="fcl"),
+        DeclareLaunchArgument(
+            "start_collision_test", default_value="true",
+            description="Start the interactive collision-test node and "
+                        "bucket-tip jog marker"),
         DeclareLaunchArgument(
             "dh_parameters_file",
             default_value=PathJoinSubstitution([
                 FindPackageShare("excavator_description"),
                 "config", "excavator_dh.yaml"])),
+        DeclareLaunchArgument(
+            "collision_model_file",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("excavator_description"),
+                "config", "excavator_collision.yaml"])),
         SetEnvironmentVariable(
             "ROS_DOMAIN_ID", LaunchConfiguration("domain_id")),
         model_view,

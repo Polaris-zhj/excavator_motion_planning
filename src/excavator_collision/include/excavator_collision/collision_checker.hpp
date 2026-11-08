@@ -11,26 +11,20 @@
 namespace tramcar {
 namespace planning {
 
-// URDF collision geometry with FCL queries. FCL types are hidden behind the
-// private adapter boundary. FK is supplied by the selected KinematicsModel.
-class UrdfFclCollisionChecker final : public CollisionChecker {
+// YAML collision geometry with local FCL queries. FCL types are hidden behind
+// the private adapter boundary. FK is supplied by the selected KinematicsModel
+// (normally DhKinematicsModel); this backend never parses URDF.
+class FclCollisionChecker final : public CollisionChecker {
  public:
-  UrdfFclCollisionChecker();
-  ~UrdfFclCollisionChecker() override;
+  FclCollisionChecker();
+  ~FclCollisionChecker() override;
 
-  UrdfFclCollisionChecker(const UrdfFclCollisionChecker&) = delete;
-  UrdfFclCollisionChecker& operator=(const UrdfFclCollisionChecker&) = delete;
+  FclCollisionChecker(const FclCollisionChecker&) = delete;
+  FclCollisionChecker& operator=(const FclCollisionChecker&) = delete;
 
-  ValidationResult Initialize(
-      const CollisionModelConfig& config) override;
   ValidationResult Initialize(
       const CollisionModelConfig& config,
       const KinematicsModel* kinematics_model) override;
-
-  // Convenience initializer for tests and standalone users. This overload
-  // creates an internal URDF kinematics model as a fallback.
-  ValidationResult Initialize(const std::string& urdf_xml,
-                              std::vector<std::string> joint_names);
 
   void SetAllowedCollisionPairs(
       const std::vector<std::pair<std::string, std::string>>& pairs) override;
@@ -70,8 +64,6 @@ class UrdfFclCollisionChecker final : public CollisionChecker {
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
-
-using FclCollisionChecker = UrdfFclCollisionChecker;
 
 }  // namespace planning
 }  // namespace tramcar

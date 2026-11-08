@@ -43,8 +43,18 @@ def generate_launch_description():
             "ROS_DOMAIN_ID", LaunchConfiguration("domain_id")),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("start_visualization", default_value="true"),
-        DeclareLaunchArgument("collision_backend", default_value="urdf_fcl"),
-        DeclareLaunchArgument("dh_parameters_file", default_value=""),
+        DeclareLaunchArgument("start_collision_test", default_value="true"),
+        DeclareLaunchArgument("collision_backend", default_value="fcl"),
+        DeclareLaunchArgument(
+            "dh_parameters_file",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("excavator_description"),
+                "config", "excavator_dh.yaml"])),
+        DeclareLaunchArgument(
+            "collision_model_file",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("excavator_description"),
+                "config", "excavator_collision.yaml"])),
         Node(
             package="robot_state_publisher",
             executable="robot_state_publisher",
@@ -74,6 +84,8 @@ def generate_launch_description():
                 "require_collision_check": True,
                 "allow_simulator_initialization": True,
                 "collision_backend": LaunchConfiguration("collision_backend"),
+                "collision_model_file": LaunchConfiguration(
+                    "collision_model_file"),
                 "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
             }],
@@ -101,6 +113,26 @@ def generate_launch_description():
                 "robot_description": robot_description,
                 "frame_id": "base_link",
                 "tip_link": "bucket_tip",
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
+            }],
+            output="screen",
+        ),
+        Node(
+            package="excavator_visualization",
+            executable="collision_visual_test_node",
+            name="excavator_collision_visual_test",
+            condition=IfCondition(LaunchConfiguration("start_collision_test")),
+            parameters=[{
+                "joint_names": [
+                    "swing_joint", "boom_joint", "stick_joint", "bucket_joint"
+                ],
+                "frame_id": "base_link",
+                "tip_link": "bucket_tip",
+                "kinematics_backend": "dh",
+                "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
+                "robot_description": robot_description,
+                "collision_model_file": LaunchConfiguration(
+                    "collision_model_file"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
             }],
             output="screen",

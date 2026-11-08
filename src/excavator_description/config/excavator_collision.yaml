@@ -1,0 +1,80 @@
+# Robot collision geometry for the 4-DOF excavator.
+#
+# This file is the single source of truth for collision shapes. It deliberately
+# does not depend on URDF: link names correspond to the physical link frames
+# reported by the selected KinematicsModel. DhKinematicsModel is configured
+# (see excavator_dh.yaml) to report exactly the same physical frames as the
+# URDF kinematics, so these origins also match the RViz robot model.
+#
+# All geometry origins are expressed in the owning physical link frame. The
+# root frame below is also the frame returned by the kinematics model and the
+# frame in which PlanningScene obstacle poses must be expressed.
+#
+# The shapes mirror the collision elements of urdf/excavator.urdf.xacro:
+#   base/swing/stick use simplified boxes, boom/bucket use the CAD meshes.
+# Mesh collision better matches the displayed geometry and avoids the false
+# boom-bucket self collisions produced by coarse boxes in folded postures.
+#
+# Supported geometry types:
+#   box:      size: [x, y, z]
+#   sphere:   radius: r
+#   cylinder: radius: r, length: l
+#   capsule:  radius: r, length: l
+#   mesh:     resource: "package://... | /absolute/path | relative/path",
+#             scale: [sx, sy, sz] (optional)
+
+robot:
+  name: excavator
+  root_frame: base_link
+
+links:
+  - link_name: base_link
+    geometries:
+      - name: base_body
+        type: box
+        size: [4.5963, 3.3000, 1.1166]
+        origin:
+          xyz: [-0.001, 0.0, 0.1617]
+          rpy: [0.0, 0.0, 0.0]
+
+  - link_name: swing_link
+    parent_link_name: base_link
+    geometries:
+      - name: swing_body
+        type: box
+        size: [3.6042, 2.6550, 1.6468]
+        origin:
+          xyz: [-0.717, 0.0525, 0.8234]
+          rpy: [0.0, 0.0, 0.0]
+
+  - link_name: boom_link
+    parent_link_name: swing_link
+    geometries:
+      - name: boom_body
+        type: mesh
+        resource: "package://excavator_description/meshes/pjjq03.STL"
+        scale: [1.0, 1.0, 1.0]
+        origin:
+          xyz: [0.0, 0.0, 0.0]
+          rpy: [0.0, 0.0, 0.0]
+
+  - link_name: stick_link
+    parent_link_name: boom_link
+    geometries:
+      - name: stick_body
+        type: box
+        size: [3.9877, 0.3000, 1.0195]
+        origin:
+          xyz: [1.0405, 0.0, 0.3506]
+          rpy: [0.0, 0.0, 0.0]
+
+  - link_name: bucket_link
+    parent_link_name: stick_link
+    geometries:
+      - name: bucket_body
+        type: mesh
+        resource: "package://excavator_description/meshes/chandou.STL"
+        scale: [1.0, 1.0, 1.0]
+        origin:
+          xyz: [0.0, 0.0, 0.0]
+          rpy: [0.0, 0.0, 0.0]

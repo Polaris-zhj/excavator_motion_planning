@@ -76,11 +76,11 @@ class MockCollisionChecker final : public CollisionChecker {
   }
 };
 
-TEST(CollisionCheckerFactoryTest, RegistersUrdfBackendByDefault) {
-  auto checker = CollisionCheckerFactory::Instance().Create("urdf_fcl");
+TEST(CollisionCheckerFactoryTest, RegistersFclBackendByDefault) {
+  auto checker = CollisionCheckerFactory::Instance().Create("fcl");
   ASSERT_NE(checker, nullptr);
   const auto types = CollisionCheckerFactory::Instance().AvailableTypes();
-  EXPECT_NE(std::find(types.begin(), types.end(), "urdf_fcl"), types.end());
+  EXPECT_NE(std::find(types.begin(), types.end(), "fcl"), types.end());
 }
 
 TEST(CollisionCheckerFactoryTest, UnknownBackendReturnsNull) {

@@ -21,6 +21,7 @@ find_package(std_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
+find_package(excavator_collision REQUIRED)
 find_package(excavator_interfaces REQUIRED)
 find_package(urdf REQUIRED)
 find_package(interactive_markers REQUIRED)
@@ -81,6 +82,18 @@ ament_target_dependencies(target_marker_node
 target_link_libraries(target_marker_node excavator_common::excavator_common)
 target_compile_options(target_marker_node PRIVATE -Wall -Wextra -Wpedantic)
 
+add_executable(collision_visual_test_node
+  src/collision_visual_test_node.cpp)
+ament_target_dependencies(collision_visual_test_node
+  rclcpp geometry_msgs sensor_msgs shape_msgs visualization_msgs
+  interactive_markers excavator_common excavator_collision
+  excavator_interfaces)
+target_link_libraries(collision_visual_test_node
+  excavator_common::excavator_common
+  excavator_collision::excavator_collision)
+target_compile_options(collision_visual_test_node PRIVATE
+  -Wall -Wextra -Wpedantic)
+
 add_library(excavator_visualization_panels SHARED
   rviz_plugins/joint_plot_panel.cpp
   rviz_plugins/planning_panel.cpp
@@ -128,7 +141,8 @@ install(TARGETS excavator_visualization_core
   EXPORT excavator_visualizationTargets
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(TARGETS trajectory_visualizer_node trajectory_replay_node
-  csv_execute_node target_marker_node DESTINATION lib/${PROJECT_NAME})
+  csv_execute_node target_marker_node collision_visual_test_node
+  DESTINATION lib/${PROJECT_NAME})
 install(TARGETS excavator_visualization_panels LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
@@ -136,5 +150,5 @@ install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 ament_export_targets(excavator_visualizationTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
 ament_export_dependencies(geometry_msgs nav_msgs shape_msgs visualization_msgs
-  excavator_interfaces excavator_common)
+  excavator_interfaces excavator_common excavator_collision)
 ament_package()

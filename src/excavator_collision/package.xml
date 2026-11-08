@@ -2,14 +2,14 @@
 <package format="3">
   <name>excavator_collision</name>
   <version>0.1.0</version>
-  <description>Replaceable collision checking interface with an isolated FCL adapter.</description>
+  <description>Replaceable YAML-driven collision checking with a vendored FCL adapter and injected DH kinematics.</description>
   <maintainer email="maintainer@example.com">Excavator Motion Planning Contributors</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>ament_index_cpp</depend>
   <depend>eigen</depend>
-  <depend>libfcl-dev</depend>
-  <depend>urdf</depend>
+  <depend>libccd-dev</depend>
+  <depend>yaml_cpp_vendor</depend>
   <depend>geometry_msgs</depend>
   <depend>shape_msgs</depend>
   <depend>excavator_common</depend>

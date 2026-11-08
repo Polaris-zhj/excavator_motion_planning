@@ -4,8 +4,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <g3log/loglevels.hpp>
 #include <memory>
+#include <sstream>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -170,6 +172,24 @@ std_msgs::msg::ColorRGBA MakeColor(float red, float green, float blue,
   return color;
 }
 
+bool ReadTextFile(const std::string& path, std::string* contents,
+                  std::string* directory) {
+  if (path.empty()) {
+    return false;
+  }
+  std::ifstream file(path);
+  if (!file) {
+    return false;
+  }
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  *contents = buffer.str();
+  const std::size_t separator = path.find_last_of('/');
+  *directory = separator == std::string::npos ? std::string()
+                                              : path.substr(0, separator);
+  return true;
+}
+
 }  // namespace
 
 class PlanningServer final : public rclcpp::Node {
@@ -202,7 +222,9 @@ class PlanningServer final : public rclcpp::Node {
     const std::string kinematics_backend =
         declare_parameter<std::string>("kinematics_backend", "urdf");
     const std::string collision_backend =
-        declare_parameter<std::string>("collision_backend", "urdf_fcl");
+        declare_parameter<std::string>("collision_backend", "fcl");
+    const std::string collision_model_file =
+        declare_parameter<std::string>("collision_model_file", "");
     const std::string dh_parameters_file =
         declare_parameter<std::string>("dh_parameters_file", "");
     planner_class_ = declare_parameter<std::string>(
@@ -317,16 +339,27 @@ class PlanningServer final : public rclcpp::Node {
                        "Unknown collision backend '%s'; available:%s",
                        collision_backend.c_str(), available.c_str());
         } else {
-          CollisionModelConfig collision_config;
-          collision_config.joint_names = joint_names_;
-          // Collision geometry is described by URDF independently of
-          // the selected FK backend (URDF or DH).
-          collision_config.model_format = "urdf";
-          collision_config.model_source = robot_description;
-          collision_config.kinematics_reference_frame = "base_link";
-          const auto collision_init =
-              collision_checker_->Initialize(collision_config,
-                                             kinematics_.get());
+          const auto load_collision_model = [&]() -> ValidationResult {
+            CollisionModelConfig collision_config;
+            collision_config.joint_names = joint_names_;
+            // Collision geometry is loaded from YAML and is independent of
+            // the URDF used for visualization.
+            collision_config.model_format = "yaml";
+            collision_config.kinematics_reference_frame = "base_link";
+            std::string collision_yaml;
+            std::string collision_base_directory;
+            if (!ReadTextFile(collision_model_file, &collision_yaml,
+                              &collision_base_directory)) {
+              return {false, "failed to read collision model YAML: " +
+                                 collision_model_file};
+            }
+            collision_config.model_source = std::move(collision_yaml);
+            collision_config.model_base_directory =
+                std::move(collision_base_directory);
+            return collision_checker_->Initialize(collision_config,
+                                                  kinematics_.get());
+          };
+          const auto collision_init = load_collision_model();
           if (!collision_init.ok) {
             RCLCPP_ERROR(get_logger(),
                          "Failed to initialize collision checker: %s",

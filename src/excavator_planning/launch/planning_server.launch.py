@@ -20,6 +20,11 @@ def generate_launch_description():
         "config",
         "excavator_dh.yaml",
     ])
+    collision_model_default = PathJoinSubstitution([
+        FindPackageShare("excavator_description"),
+        "config",
+        "excavator_collision.yaml",
+    ])
     return LaunchDescription([
         DeclareLaunchArgument(
             "model", default_value="excavator.urdf.xacro",
@@ -47,14 +52,17 @@ def generate_launch_description():
         DeclareLaunchArgument("planner_goal_tolerance", default_value="0.15"),
         DeclareLaunchArgument("planner_random_seed", default_value="42"),
         DeclareLaunchArgument(
-            "kinematics_backend", default_value="urdf",
-            description="Kinematics backend: urdf or dh"),
+            "kinematics_backend", default_value="dh",
+            description="Kinematics backend: dh or urdf"),
         DeclareLaunchArgument(
-            "collision_backend", default_value="urdf_fcl",
-            description="Collision backend type (currently urdf_fcl)"),
+            "collision_backend", default_value="fcl",
+            description="Collision backend type (YAML geometry + local FCL)"),
         DeclareLaunchArgument(
             "dh_parameters_file", default_value=dh_parameters_default,
             description="Modified-DH parameter file used by the dh backend"),
+        DeclareLaunchArgument(
+            "collision_model_file", default_value=collision_model_default,
+            description="YAML robot collision geometry file"),
         Node(
             package="excavator_planning",
             executable="planning_server",
@@ -65,6 +73,8 @@ def generate_launch_description():
                     Command(["xacro ", model_file]), value_type=str),
                 "kinematics_backend": LaunchConfiguration("kinematics_backend"),
                 "collision_backend": LaunchConfiguration("collision_backend"),
+                "collision_model_file": LaunchConfiguration(
+                    "collision_model_file"),
                 "dh_parameters_file": LaunchConfiguration("dh_parameters_file"),
                 "joint_names": [
                     "swing_joint", "boom_joint", "stick_joint", "bucket_joint"

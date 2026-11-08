@@ -60,16 +60,16 @@ std::vector<std::string> CollisionCheckerFactory::AvailableTypes() const {
 }
 
 namespace {
-struct UrdfFclRegistrar {
-  UrdfFclRegistrar() {
+struct FclRegistrar {
+  FclRegistrar() {
     CollisionCheckerFactory::Instance().Register(
-        "urdf_fcl", []() -> std::unique_ptr<CollisionChecker> {
-          return std::make_unique<UrdfFclCollisionChecker>();
+        "fcl", []() -> std::unique_ptr<CollisionChecker> {
+          return std::make_unique<FclCollisionChecker>();
         });
   }
 };
 
-const UrdfFclRegistrar kUrdfFclRegistrar;
+const FclRegistrar kFclRegistrar;
 }  // namespace
 
 }  // namespace planning

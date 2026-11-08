@@ -2,8 +2,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -110,6 +112,8 @@ class TrajectoryControllerNode final : public rclcpp::Node {
         declare_parameter<bool>("require_collision_check", true);
     allow_simulator_initialization_ =
         declare_parameter<bool>("allow_simulator_initialization", true);
+    manual_control_enabled_ =
+        declare_parameter<bool>("manual_control_enabled", true);
     std::vector<double> default_acceleration =
         declare_parameter<std::vector<double>>(
             "max_acceleration", {1.0, 0.6, 0.8, 1.0});
@@ -136,7 +140,9 @@ class TrajectoryControllerNode final : public rclcpp::Node {
     const std::string robot_description =
         declare_parameter<std::string>("robot_description", "");
     const std::string collision_backend =
-        declare_parameter<std::string>("collision_backend", "urdf_fcl");
+        declare_parameter<std::string>("collision_backend", "fcl");
+    const std::string collision_model_file =
+        declare_parameter<std::string>("collision_model_file", "");
     const std::string dh_parameters_file =
         declare_parameter<std::string>("dh_parameters_file", "");
 
@@ -179,14 +185,29 @@ class TrajectoryControllerNode final : public rclcpp::Node {
         } else {
           tramcar::planning::CollisionModelConfig collision_config;
           collision_config.joint_names = joint_names_;
-          collision_config.model_format =
-              collision_backend == "dh_fcl" ? "dh" : "urdf";
-          collision_config.model_source =
-              collision_config.model_format == "urdf"
-                  ? robot_description
-                  : dh_parameters_file;
+          collision_config.model_format = "yaml";
+          collision_config.kinematics_reference_frame = "base_link";
+          std::string collision_yaml;
+          std::ifstream collision_file(collision_model_file);
+          if (collision_file) {
+            std::stringstream buffer;
+            buffer << collision_file.rdbuf();
+            collision_yaml = buffer.str();
+            const std::size_t separator =
+                collision_model_file.find_last_of('/');
+            if (separator != std::string::npos) {
+              collision_config.model_base_directory =
+                  collision_model_file.substr(0, separator);
+            }
+          }
+          collision_config.model_source = std::move(collision_yaml);
           const ValidationResult collision_initialized =
-              collision_checker_->Initialize(collision_config);
+              collision_config.model_source.empty()
+                  ? ValidationResult{
+                        false, "failed to read collision model YAML: " +
+                                   collision_model_file}
+                  : collision_checker_->Initialize(collision_config,
+                                                   &kinematics_);
           if (!collision_initialized.ok) {
             RCLCPP_ERROR(get_logger(),
                          "Failed to initialize collision checker: %s",
@@ -288,6 +309,12 @@ class TrajectoryControllerNode final : public rclcpp::Node {
             [this](
                 excavator_interfaces::msg::TrajectoryUpdate::ConstSharedPtr msg) {
               HandleTrajectoryUpdate(std::move(msg));
+            });
+    manual_joint_subscription_ =
+        create_subscription<sensor_msgs::msg::JointState>(
+            "/excavator/manual_joint_state", 10,
+            [this](sensor_msgs::msg::JointState::ConstSharedPtr message) {
+              HandleManualJointState(std::move(message));
             });
     scene_subscription_ =
         create_subscription<excavator_interfaces::msg::PlanningScene>(
@@ -579,6 +606,47 @@ class TrajectoryControllerNode final : public rclcpp::Node {
     PublishStatus(true);
   }
 
+  // Manual jogging from the RViz collision-test marker. The interactive node
+  // solves IK and publishes joint targets here; the controller cancels any
+  // active trajectory and moves the simulator to the requested state so the
+  // regular /joint_states publisher stays the single authoritative source.
+  void HandleManualJointState(
+      const sensor_msgs::msg::JointState::ConstSharedPtr& message) {
+    if (!manual_control_enabled_ || !controller_ || !simulator_) {
+      return;
+    }
+    JointPositions positions;
+    positions.reserve(joint_names_.size());
+    for (const std::string& name : joint_names_) {
+      const auto found =
+          std::find(message->name.begin(), message->name.end(), name);
+      if (found == message->name.end()) {
+        return;
+      }
+      const std::size_t index =
+          static_cast<std::size_t>(found - message->name.begin());
+      if (index >= message->position.size() ||
+          !std::isfinite(message->position[index])) {
+        return;
+      }
+      positions.push_back(message->position[index]);
+    }
+
+    controller_->Cancel();
+    RobotState state;
+    state.positions = std::move(positions);
+    state.velocities.assign(joint_names_.size(), 0.0);
+    const ValidationResult applied = simulator_->SetState(state);
+    if (!applied.ok) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                           "Manual jog rejected: %s",
+                           applied.message.c_str());
+      return;
+    }
+    PublishJointState();
+    PublishStatus(true);
+  }
+
   void ControlLoop() {
     const auto now = Clock::now();
     double dt = std::chrono::duration<double>(now - last_cycle_).count();
@@ -727,6 +795,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
   bool collision_ready_{false};
   bool require_collision_check_{true};
   bool allow_simulator_initialization_{true};
+  bool manual_control_enabled_{true};
   double max_collision_joint_step_{0.03};
   double max_tracking_error_{0.5};
   double completion_tolerance_{0.02};
@@ -745,6 +814,8 @@ class TrajectoryControllerNode final : public rclcpp::Node {
       trajectory_subscription_;
   rclcpp::Subscription<excavator_interfaces::msg::TrajectoryUpdate>::SharedPtr
       update_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
+      manual_joint_subscription_;
   rclcpp::Subscription<excavator_interfaces::msg::PlanningScene>::SharedPtr
       scene_subscription_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr cancel_subscription_;

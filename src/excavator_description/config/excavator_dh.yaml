@@ -29,7 +29,11 @@ joints:
   - name: boom_joint
     link: boom_link
     alpha_prev: -1.5707963267948966
-    a_prev: 1.009
+    # Horizontal offset of the boom pivot from the swing frame. This is the
+    # URDF boom_joint origin x (-0.009), not the boom link length. Using
+    # 1.009 here shifts the whole DH chain ~1.018 m away from the URDF/visual
+    # robot, so collision geometry no longer lines up with the displayed arms.
+    a_prev: -0.009
     d: 0.0
     theta_offset: -0.30506418459896556
     limits: [-0.9, 0.35]

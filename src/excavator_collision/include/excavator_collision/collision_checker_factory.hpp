@@ -14,9 +14,9 @@ namespace planning {
 using CollisionCheckerCreator =
     std::function<std::unique_ptr<CollisionChecker>()>;
 
-// Runtime registry for collision backends. The default backend is
-// "urdf_fcl"; a DH-native backend can be added later by registering another
-// creator, without touching the planner or controller.
+// Runtime registry for collision backends. The default backend is "fcl"
+// (YAML collision geometry + injected DH/URDF kinematics); another creator
+// can be registered later without touching the planner or controller.
 class CollisionCheckerFactory {
  public:
   static CollisionCheckerFactory& Instance();

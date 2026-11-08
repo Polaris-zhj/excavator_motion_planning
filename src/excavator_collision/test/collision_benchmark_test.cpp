@@ -3,33 +3,46 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <string>
-#include <utility>
-#include <vector>
+
+#include "kinematics/dh_kinematics_model.hpp"
 
 namespace tramcar {
 namespace planning {
 namespace {
 
-// Optional performance check for the full excavator model. Run manually:
-//   EXCAVATOR_URDF=/tmp/excavator.urdf ./collision_benchmark_test
-TEST(UrdfFclCollisionCheckerTest, BenchmarksFullExcavatorModel) {
-  const char* path = std::getenv("EXCAVATOR_URDF");
-  if (path == nullptr) {
-    GTEST_SKIP() << "set EXCAVATOR_URDF to benchmark the full model";
-  }
+std::string ReadFile(const std::string& path) {
   std::ifstream file(path);
-  ASSERT_TRUE(file.good()) << path;
-  const std::string urdf((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
+  if (!file) {
+    return {};
+  }
+  return std::string((std::istreambuf_iterator<char>(file)),
+                     std::istreambuf_iterator<char>());
+}
 
-  UrdfFclCollisionChecker checker;
-  const auto initialized = checker.Initialize(
-      urdf, {"swing_joint", "boom_joint", "stick_joint", "bucket_joint"});
+// Performance check for the full excavator DH + YAML collision model.
+TEST(FclCollisionCheckerTest, BenchmarksFullExcavatorModel) {
+  const std::string dh_yaml = ReadFile(TEST_DH_PATH);
+  const std::string collision_yaml = ReadFile(TEST_COLLISION_YAML_PATH);
+  ASSERT_FALSE(dh_yaml.empty()) << TEST_DH_PATH;
+  ASSERT_FALSE(collision_yaml.empty()) << TEST_COLLISION_YAML_PATH;
+
+  DhKinematicsModel kinematics(
+      {"swing_joint", "boom_joint", "stick_joint", "bucket_joint"});
+  const auto kinematics_initialized =
+      kinematics.InitializeFromString(dh_yaml);
+  ASSERT_TRUE(kinematics_initialized.ok) << kinematics_initialized.message;
+
+  FclCollisionChecker checker;
+  CollisionModelConfig config;
+  config.joint_names = kinematics.joint_names();
+  config.model_source = collision_yaml;
+  config.model_format = "yaml";
+  config.kinematics_reference_frame = "base_link";
+  const auto initialized = checker.Initialize(config, &kinematics);
   ASSERT_TRUE(initialized.ok) << initialized.message;
   checker.SetAllowedCollisionPairs(
       {{"base_link", "boom_link"},
@@ -39,7 +52,7 @@ TEST(UrdfFclCollisionCheckerTest, BenchmarksFullExcavatorModel) {
        {"swing_link", "bucket_link"}});
 
   excavator_interfaces::msg::PlanningScene scene;
-  scene.header.frame_id = "world";
+  scene.header.frame_id = "base_link";
   const JointPositions home = {0.0, -0.35, 0.45, -0.40};
   CollisionCheckResult result = checker.CheckState(home, scene);
   ASSERT_TRUE(result.valid) << result.message;

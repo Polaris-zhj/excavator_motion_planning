@@ -101,7 +101,8 @@ class ExcavatorPlanningPanel : public rviz_common::Panel {
   geometry_msgs::msg::Pose start_pose_;
   geometry_msgs::msg::Pose pending_start_pose_;
 
-  tramcar::planning::visualization::PlanningSceneManager scene_manager_;
+  tramcar::planning::visualization::PlanningSceneManager scene_manager_{
+      "base_link"};
   std::unique_ptr<interactive_markers::InteractiveMarkerServer>
       obstacle_server_;
   std::vector<QDoubleSpinBox*> target_spinboxes_;

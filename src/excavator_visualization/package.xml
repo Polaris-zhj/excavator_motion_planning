@@ -20,6 +20,7 @@
   <depend>trajectory_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>excavator_common</depend>
+  <depend>excavator_collision</depend>
   <depend>excavator_interfaces</depend>
   <depend>urdf</depend>
   <depend>interactive_markers</depend>

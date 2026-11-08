@@ -10,9 +10,8 @@
 
 #include <Eigen/Geometry>
 
-#include "excavator_collision/internal/robot_collision_model.hpp"
+#include "excavator_collision/robot_collision_model.hpp"
 #include "fcl_collision_model.hpp"
-#include "kinematics/urdf_kinematics_model.hpp"
 
 namespace tramcar {
 namespace planning {
@@ -39,10 +38,9 @@ Eigen::Isometry3d ToTransform(const Pose3& pose, std::string* error) {
 
 }  // namespace
 
-struct UrdfFclCollisionChecker::Impl {
+struct FclCollisionChecker::Impl {
   RobotCollisionModel robot_model;
   FclCollisionModel fcl_model;
-  std::unique_ptr<UrdfKinematicsModel> owned_kinematics;
   const KinematicsModel* kinematics_model{nullptr};
   std::vector<std::string> joint_names;
   std::vector<std::pair<std::string, std::string>> allowed_pairs;
@@ -74,14 +72,13 @@ struct UrdfFclCollisionChecker::Impl {
       }
 
       std::string error;
-      const Eigen::Isometry3d reference_to_link =
-          ToTransform(pose, &error);
-      const Eigen::Isometry3d transform =
-          robot_model.root_to_reference_frame() * reference_to_link;
+      // YAML root_frame is defined to be the frame returned by the kinematics
+      // model, so no additional frame transform is applied here.
+      const Eigen::Isometry3d link_pose = ToTransform(pose, &error);
       if (!error.empty()) {
         return {false, error + ": " + link.link_name};
       }
-      link_poses->emplace(link.link_name, transform);
+      link_poses->emplace(link.link_name, link_pose);
     }
     return {true, ""};
   }
@@ -179,84 +176,54 @@ struct UrdfFclCollisionChecker::Impl {
   }
 };
 
-UrdfFclCollisionChecker::UrdfFclCollisionChecker()
+FclCollisionChecker::FclCollisionChecker()
     : impl_(std::make_unique<Impl>()) {}
 
-UrdfFclCollisionChecker::~UrdfFclCollisionChecker() = default;
+FclCollisionChecker::~FclCollisionChecker() = default;
 
-ValidationResult UrdfFclCollisionChecker::Initialize(
-    const CollisionModelConfig& config) {
-  return Initialize(config, nullptr);
-}
-
-ValidationResult UrdfFclCollisionChecker::Initialize(
+ValidationResult FclCollisionChecker::Initialize(
     const CollisionModelConfig& config,
     const KinematicsModel* kinematics_model) {
   impl_->initialized = false;
-  impl_->owned_kinematics.reset();
   impl_->kinematics_model = nullptr;
   impl_->joint_names.clear();
   impl_->allowed_pairs.clear();
 
-  if (!config.model_format.empty() && config.model_format != "urdf") {
-    return {false, "urdf_fcl backend expects a URDF collision model"};
+  if (!config.model_format.empty() && config.model_format != "yaml") {
+    return {false, "fcl backend expects a YAML collision model"};
   }
   if (config.model_source.empty() || config.joint_names.empty()) {
-    return {false, "URDF model source and planning joints must not be empty"};
+    return {false, "collision YAML source and planning joints must not be "
+                   "empty"};
   }
-
   if (kinematics_model == nullptr) {
-    auto urdf_kinematics =
-        std::make_unique<UrdfKinematicsModel>(config.joint_names);
-    const ValidationResult kinematics_result =
-        urdf_kinematics->InitializeFromString(config.model_source);
-    if (!kinematics_result.ok) {
-      return {false, "failed to initialize fallback URDF kinematics: " +
-                         kinematics_result.message};
-    }
-    impl_->owned_kinematics = std::move(urdf_kinematics);
-    impl_->kinematics_model = impl_->owned_kinematics.get();
-  } else {
-    if (kinematics_model->joint_names() != config.joint_names) {
-      return {false, "kinematics joint ordering does not match collision "
-                     "configuration"};
-    }
-    impl_->kinematics_model = kinematics_model;
+    return {false, "the fcl backend requires an initialized kinematics model"};
+  }
+  if (kinematics_model->joint_names() != config.joint_names) {
+    return {false, "kinematics joint ordering does not match collision "
+                   "configuration"};
   }
 
-  const ValidationResult model_result =
-      impl_->robot_model.InitializeFromUrdf(
-          config.model_source, config.joint_names,
-          config.kinematics_reference_frame);
+  const ValidationResult model_result = impl_->robot_model.InitializeFromYaml(
+      config.model_source, config.joint_names,
+      config.kinematics_reference_frame, config.model_base_directory);
   if (!model_result.ok) {
-    impl_->kinematics_model = nullptr;
-    impl_->owned_kinematics.reset();
     return model_result;
   }
 
   const ValidationResult fcl_result =
       impl_->fcl_model.Initialize(impl_->robot_model);
   if (!fcl_result.ok) {
-    impl_->kinematics_model = nullptr;
-    impl_->owned_kinematics.reset();
     return fcl_result;
   }
 
+  impl_->kinematics_model = kinematics_model;
   impl_->joint_names = config.joint_names;
   impl_->initialized = true;
   return {true, ""};
 }
 
-ValidationResult UrdfFclCollisionChecker::Initialize(
-    const std::string& urdf_xml, std::vector<std::string> joint_names) {
-  CollisionModelConfig config;
-  config.joint_names = std::move(joint_names);
-  config.model_source = urdf_xml;
-  config.model_format = "urdf";
-  return Initialize(config, nullptr);
-}
-
-void UrdfFclCollisionChecker::SetAllowedCollisionPairs(
+void FclCollisionChecker::SetAllowedCollisionPairs(
     const std::vector<std::pair<std::string, std::string>>& pairs) {
   impl_->allowed_pairs.clear();
   for (const auto& pair : pairs) {
@@ -267,32 +234,32 @@ void UrdfFclCollisionChecker::SetAllowedCollisionPairs(
   }
 }
 
-CollisionCheckResult UrdfFclCollisionChecker::CheckState(
+CollisionCheckResult FclCollisionChecker::CheckState(
     const JointPositions& positions,
     const excavator_interfaces::msg::PlanningScene& scene) const {
   return impl_->Check(positions, scene, true, true);
 }
 
-CollisionCheckResult UrdfFclCollisionChecker::CheckSelfCollision(
+CollisionCheckResult FclCollisionChecker::CheckSelfCollision(
     const JointPositions& positions) const {
   const excavator_interfaces::msg::PlanningScene empty_scene;
   return impl_->Check(positions, empty_scene, true, false);
 }
 
-CollisionCheckResult UrdfFclCollisionChecker::CheckEnvironmentCollision(
+CollisionCheckResult FclCollisionChecker::CheckEnvironmentCollision(
     const JointPositions& positions,
     const excavator_interfaces::msg::PlanningScene& scene) const {
   return impl_->Check(positions, scene, false, true);
 }
 
-CollisionCheckResult UrdfFclCollisionChecker::CheckPath(
+CollisionCheckResult FclCollisionChecker::CheckPath(
     const JointPath& path,
     const excavator_interfaces::msg::PlanningScene& scene,
     double max_joint_step) const {
   return impl_->CheckPath(path, scene, max_joint_step, true, true);
 }
 
-CollisionCheckResult UrdfFclCollisionChecker::CheckPathCollisionWithObstacle(
+CollisionCheckResult FclCollisionChecker::CheckPathCollisionWithObstacle(
     const JointPath& path,
     const excavator_interfaces::msg::PlanningScene& scene,
     const std::string& obstacle_id, double max_joint_step) const {
@@ -305,7 +272,7 @@ CollisionCheckResult UrdfFclCollisionChecker::CheckPathCollisionWithObstacle(
                           obstacle_id);
 }
 
-CollisionCheckResult UrdfFclCollisionChecker::CheckTrajectory(
+CollisionCheckResult FclCollisionChecker::CheckTrajectory(
     const JointTrajectory& trajectory,
     const excavator_interfaces::msg::PlanningScene& scene,
     double max_joint_step) const {
@@ -329,7 +296,7 @@ CollisionCheckResult UrdfFclCollisionChecker::CheckTrajectory(
   return CheckPath(path, scene, max_joint_step);
 }
 
-CollisionDistanceResult UrdfFclCollisionChecker::ComputeDistanceToObstacle(
+CollisionDistanceResult FclCollisionChecker::ComputeDistanceToObstacle(
     const JointPositions& positions,
     const excavator_interfaces::msg::PlanningScene& scene,
     const std::string& obstacle_id) const {

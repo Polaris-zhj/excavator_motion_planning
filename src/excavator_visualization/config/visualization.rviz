@@ -284,6 +284,17 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /excavator/collision_result
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: CollisionTest
+      Namespaces: {}
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /excavator/collision_test_markers
+      Value: true
     - Class: rviz_default_plugins/InteractiveMarkers
       Enable Transparency: true
       Enabled: true
@@ -298,6 +309,15 @@ Visualization Manager:
       Enabled: true
       Interactive Markers Namespace: /excavator_obstacle
       Name: ObstacleMarkers
+      Show Axes: true
+      Show Descriptions: true
+      Show Visual Aids: true
+      Value: true
+    - Class: rviz_default_plugins/InteractiveMarkers
+      Enable Transparency: true
+      Enabled: true
+      Interactive Markers Namespace: /excavator_collision_test
+      Name: ManualJog
       Show Axes: true
       Show Descriptions: true
       Show Visual Aids: true

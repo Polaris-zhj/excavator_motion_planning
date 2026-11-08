@@ -24,7 +24,9 @@ struct BoxObstacle {
 // snapshots. The visualization never performs collision checking itself.
 class PlanningSceneManager {
  public:
-  explicit PlanningSceneManager(std::string frame_id = "world");
+  // Planning and collision checking use base_link (the frame returned by the
+  // DH kinematics model) as the scene root.
+  explicit PlanningSceneManager(std::string frame_id = "base_link");
 
   ValidationResult AddBox(const std::string& id,
                           const geometry_msgs::msg::Pose& pose,

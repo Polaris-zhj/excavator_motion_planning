@@ -32,23 +32,27 @@ struct CollisionDistanceResult {
   std::string message;
 };
 
-// Backend-independent collision model description. The source currently
-// contains URDF XML and is parsed into RobotCollisionModel; it never contains
-// FCL types.
+// Backend-independent collision model description. `model_source` contains
+// the robot collision YAML and is parsed into RobotCollisionModel; it never
+// contains FCL types. Kinematics comes from the injected KinematicsModel, so
+// no URDF is required by the collision backend.
 struct CollisionModelConfig {
   std::vector<std::string> joint_names;
   std::string model_source;
-  std::string model_format{"urdf"};
-  // Reference frame returned by the selected KinematicsModel. The collision
-  // scene is expressed in the URDF root frame; a fixed transform is applied
-  // when these frames differ.
+  std::string model_format{"yaml"};
+  // Directory used to resolve relative mesh resources in the YAML. Package
+  // URIs ("package://...") and absolute paths are resolved independently.
+  std::string model_base_directory;
+  // Frame returned by the selected KinematicsModel and used by PlanningScene.
+  // With no URDF frame tree there is no implicit transform, so the YAML
+  // robot.root_frame must equal this value.
   std::string kinematics_reference_frame{"base_link"};
 };
 
 // Planning and application code depends on this interface, not a concrete
 // collision backend. The kinematics model is borrowed and must outlive this
-// checker. Passing nullptr requests the URDF kinematics fallback for direct
-// use and tests; normal application wiring should pass its configured model.
+// checker. A kinematics model is required: the collision backend does not
+// parse URDF or construct a fallback FK model.
 class CollisionChecker {
  public:
   virtual ~CollisionChecker() = default;
