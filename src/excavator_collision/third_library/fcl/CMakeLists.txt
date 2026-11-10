@@ -5,8 +5,9 @@ project(excavator_fcl VERSION 0.7.0 LANGUAGES CXX)
 #
 # The upstream FCL source tree (https://github.com/flexible-collision-library/fcl,
 # release 0.7.0) is vendored here so the planning stack does not depend on a
-# system libfcl installation. Only the core geometry/broadphase/narrowphase
-# code is built; the optional OctoMap backend is disabled.
+# system libfcl installation. The core geometry/broadphase/narrowphase code is
+# built together with the optional OctoMap backend, which is required for
+# point-cloud obstacle queries.
 #
 # This target is intentionally named excavator_fcl instead of fcl to avoid
 # clashing with an installed system FCL package.
@@ -21,16 +22,29 @@ find_package(Eigen3 3.0.5 REQUIRED)
 find_package(PkgConfig REQUIRED)
 # FCL 0.7 requires libccd for its GJK/EPA convex algorithms.
 pkg_search_module(CCD REQUIRED IMPORTED_TARGET ccd libccd)
+# OctoMap provides octomap::OcTree, used by fcl::OcTree for point clouds.
+pkg_check_modules(OCTOMAP REQUIRED IMPORTED_TARGET octomap)
 
 set(FCL_VERSION "0.7.0")
 set(FCL_MAJOR_VERSION 0)
 set(FCL_MINOR_VERSION 7)
 set(FCL_PATCH_VERSION 0)
-# The local build deliberately excludes OctoMap and SSE-specific code.
+# The local build enables OctoMap and keeps SSE-specific code disabled.
 set(FCL_HAVE_SSE 0)
-set(FCL_HAVE_OCTOMAP 0)
+set(FCL_HAVE_OCTOMAP 1)
 set(FCL_ENABLE_PROFILING 0)
 set(GENERATED_FILE_MARKER "GENERATED FILE DO NOT EDIT")
+
+if(OCTOMAP_VERSION)
+  string(REPLACE "." ";" OCTOMAP_VERSION_LIST "${OCTOMAP_VERSION}")
+  list(GET OCTOMAP_VERSION_LIST 0 OCTOMAP_MAJOR_VERSION)
+  list(GET OCTOMAP_VERSION_LIST 1 OCTOMAP_MINOR_VERSION)
+  list(GET OCTOMAP_VERSION_LIST 2 OCTOMAP_PATCH_VERSION)
+else()
+  set(OCTOMAP_MAJOR_VERSION 1)
+  set(OCTOMAP_MINOR_VERSION 9)
+  set(OCTOMAP_PATCH_VERSION 0)
+endif()
 
 set(FCL_SOURCE_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(FCL_BINARY_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/include")
@@ -40,9 +54,8 @@ configure_file(
   "${FCL_BINARY_INCLUDE_DIR}/fcl/config.h"
   @ONLY)
 
-# OctoMap support is disabled, so its implementation file is not compiled.
+# OctoMap support is enabled, so octree implementation sources are compiled.
 file(GLOB_RECURSE FCL_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-list(FILTER FCL_SOURCES EXCLUDE REGEX "/octree/")
 
 add_library(excavator_fcl STATIC ${FCL_SOURCES})
 
@@ -80,7 +93,8 @@ target_include_directories(excavator_fcl PUBLIC
   $<BUILD_INTERFACE:${FCL_SOURCE_INCLUDE_DIR}>)
 target_link_libraries(excavator_fcl PUBLIC
   Eigen3::Eigen
-  PkgConfig::CCD)
+  PkgConfig::CCD
+  PkgConfig::OCTOMAP)
 
 # The vendored library is linked into libexcavator_collision.so. Hide its
 # symbols so they cannot clash with a system libfcl loaded by another

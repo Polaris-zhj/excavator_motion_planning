@@ -9,7 +9,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "std_msgs/msg/color_rgba.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -198,4 +198,4 @@ ValidationResult TrajectoryVisualizer::BuildEndEffectorPath(
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

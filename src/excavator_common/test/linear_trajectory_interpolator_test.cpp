@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -34,4 +34,4 @@ TEST(LinearTrajectoryInterpolatorTest, RejectsTimeOutsideTrajectory) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

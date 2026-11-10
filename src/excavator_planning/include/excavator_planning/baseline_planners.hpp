@@ -8,7 +8,7 @@
 
 #include "excavator_common/planner_interfaces.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Deterministic joint-space baseline. It first tries the straight line and,
@@ -38,6 +38,6 @@ class SimpleTimeParameterizer final : public TimeParameterizer {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_PLANNING__BASELINE_PLANNERS_HPP_

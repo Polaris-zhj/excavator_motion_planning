@@ -13,8 +13,11 @@
 #include <Eigen/Geometry>
 
 #include "excavator_collision/collision_checker_factory.hpp"
-#include "excavator_collision/robot_collision_model.hpp"
+#include "excavator_collision/obstacle_adapter.hpp"
+#include "excavator_collision/robot_collision_geometry_model.hpp"
 #include "excavator_common/joint_trajectory.hpp"
+#include "excavator_interfaces/msg/planning_scene.hpp"
+#include "geometry_msgs/msg/point_stamped.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "interactive_markers/interactive_marker_server.hpp"
@@ -23,6 +26,12 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "shape_msgs/msg/solid_primitive.hpp"
+#include "std_msgs/msg/empty.hpp"
+#include <tf2/exceptions.h>
+#include <tf2/time.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "visualization_msgs/msg/interactive_marker.hpp"
 #include "visualization_msgs/msg/interactive_marker_control.hpp"
 #include "visualization_msgs/msg/interactive_marker_feedback.hpp"
@@ -32,26 +41,35 @@
 namespace excavator_visualization {
 namespace {
 
-using tramcar::planning::CollisionCheckResult;
-using tramcar::planning::CollisionChecker;
-using tramcar::planning::CollisionCheckerFactory;
-using tramcar::planning::CollisionGeometry;
-using tramcar::planning::CollisionGeometryInstance;
-using tramcar::planning::CollisionGeometryType;
-using tramcar::planning::CollisionModelConfig;
-using tramcar::planning::DhKinematicsModel;
-using tramcar::planning::InverseKinematicsOptions;
-using tramcar::planning::InverseKinematicsResult;
-using tramcar::planning::JointPositions;
-using tramcar::planning::KinematicsModel;
-using tramcar::planning::LinkCollisionGeometry;
-using tramcar::planning::Pose3;
-using tramcar::planning::RobotCollisionModel;
-using tramcar::planning::UrdfKinematicsModel;
-using tramcar::planning::ValidationResult;
+namespace data = excavator::planning::data;
+
+using excavator::planning::CollisionCheckResult;
+using excavator::planning::CollisionChecker;
+using excavator::planning::CollisionCheckerFactory;
+using excavator::planning::CollisionGeometry;
+using excavator::planning::CollisionGeometryInstance;
+using excavator::planning::CollisionGeometryType;
+using excavator::planning::CollisionModelConfig;
+using excavator::planning::CollisionQueryOptions;
+using excavator::planning::DhKinematicsModel;
+using excavator::planning::InverseKinematicsOptions;
+using excavator::planning::InverseKinematicsResult;
+using excavator::planning::JointPositions;
+using excavator::planning::KinematicsModel;
+using excavator::planning::LinkCollisionGeometry;
+using excavator::planning::Obstacle;
+using excavator::planning::ObstacleAdapter;
+using excavator::planning::ObstacleList;
+using excavator::planning::ObstacleType;
+using excavator::planning::Pose3;
+using excavator::planning::RobotCollisionGeometryModel;
+using excavator::planning::UrdfKinematicsModel;
+using excavator::planning::ValidationResult;
 
 const char kTipMarker[] = "bucket_tip_drag";
 const char kCollisionNamespace[] = "excavator_collision_geometry";
+// Obstacle id used for the point cloud built from RViz "Publish Point" clicks.
+constexpr int kClickedPointCloudId = 9001;
 
 std_msgs::msg::ColorRGBA MakeColor(float red, float green, float blue,
                                    float alpha) {
@@ -157,8 +175,8 @@ bool IsFinite(const geometry_msgs::msg::Pose& pose) {
 //  - continuously checks the current /joint_states against /excavator/scene
 //    (the RViz planning panel publishes this when an obstacle is added,
 //    edited or dragged);
-//  - paints every robot collision body and the offending obstacle bright red
-//    on collision;
+//  - paints the colliding link's collision body and the offending obstacle
+//    bright red on collision;
 //  - offers a draggable bucket-tip marker that solves IK and publishes
 //    /excavator/manual_joint_state so the simulated robot can be jogged.
 //
@@ -183,12 +201,25 @@ class CollisionVisualTestNode final : public rclcpp::Node {
         declare_parameter<std::string>("collision_model_file", "");
     const double check_rate_hz =
         declare_parameter<double>("check_rate_hz", 20.0);
+    point_cloud_resolution_ =
+        declare_parameter<double>("point_cloud_resolution", 0.05);
+    point_marker_scale_ =
+        declare_parameter<double>("point_marker_scale", 0.06);
+    if (!std::isfinite(point_cloud_resolution_) ||
+        point_cloud_resolution_ <= 0.0) {
+      RCLCPP_WARN(get_logger(),
+                  "point_cloud_resolution must be positive; using 0.05 m");
+      point_cloud_resolution_ = 0.05;
+    }
+    if (!std::isfinite(point_marker_scale_) || point_marker_scale_ <= 0.0) {
+      point_marker_scale_ = 0.06;
+    }
+    // Empty by default: the visual test must show every non-adjacent
+    // self-collision, including bucket hitting the crawler chassis. Callers
+    // can still opt into specific allowed pairs through the parameter.
     const std::vector<std::string> allowed_pairs =
         declare_parameter<std::vector<std::string>>(
-            "allowed_collision_pairs",
-            {"base_link:boom_link", "base_link:stick_link",
-             "base_link:bucket_link", "swing_link:stick_link",
-             "swing_link:bucket_link"});
+            "allowed_collision_pairs", std::vector<std::string>{});
 
     if (!LoadKinematics(kinematics_backend, dh_parameters_file,
                         robot_description)) {
@@ -241,6 +272,23 @@ class CollisionVisualTestNode final : public rclcpp::Node {
               }
               HandleManualTarget(ToPose3(message->pose));
             });
+    clicked_point_subscription_ =
+        create_subscription<geometry_msgs::msg::PointStamped>(
+            "/clicked_point", 10,
+            [this](geometry_msgs::msg::PointStamped::ConstSharedPtr message) {
+              HandleClickedPoint(std::move(message));
+            });
+    clear_cloud_subscription_ = create_subscription<std_msgs::msg::Empty>(
+        "/excavator/clear_point_cloud", 10,
+        [this](std_msgs::msg::Empty::ConstSharedPtr) {
+          const std::size_t count = clicked_points_.size();
+          clicked_points_.clear();
+          RCLCPP_INFO(get_logger(), "Cleared %zu point-cloud test points",
+                      count);
+        });
+
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
 
     server_ = std::make_unique<interactive_markers::InteractiveMarkerServer>(
         "excavator_collision_test", this);
@@ -254,7 +302,8 @@ class CollisionVisualTestNode final : public rclcpp::Node {
 
     RCLCPP_INFO(get_logger(),
                 "Collision visual test ready: drag '%s' to jog, add/drag box "
-                "obstacles in the planning panel; collisions turn red",
+                "obstacles in the planning panel, or use RViz 'Publish Point' "
+                "to add point-cloud points; collisions turn red",
                 kTipMarker);
   }
 
@@ -316,7 +365,9 @@ class CollisionVisualTestNode final : public rclcpp::Node {
       checker_.reset();
       return;
     }
-    checker_->SetAllowedCollisionPairs(ParsePairs(allowed_pairs));
+    for (const auto& pair : ParsePairs(allowed_pairs)) {
+      checker_->SetAllowedCollision(pair.first, pair.second, true);
+    }
 
     const ValidationResult model_loaded = robot_model_.InitializeFromYaml(
         collision_yaml, joint_names_, frame_id_, collision_base_directory);
@@ -496,13 +547,176 @@ class CollisionVisualTestNode final : public rclcpp::Node {
     server_->applyChanges();
   }
 
+  // RViz "Publish Point" publishes /clicked_point in the fixed frame. Points
+  // are transformed to the collision frame and accumulated into one point
+  // cloud obstacle, so point-cloud collision checking is usable like a box.
+  void HandleClickedPoint(
+      const geometry_msgs::msg::PointStamped::ConstSharedPtr& message) {
+    if (!message) {
+      return;
+    }
+    geometry_msgs::msg::PointStamped point = *message;
+    if (point.header.frame_id.empty()) {
+      point.header.frame_id = frame_id_;
+    }
+    if (point.header.frame_id != frame_id_) {
+      try {
+        point = tf_buffer_->transform(*message, frame_id_,
+                                      tf2::durationFromSec(0.1));
+      } catch (const tf2::TransformException& exception) {
+        RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 2000,
+            "Cannot transform clicked_point from '%s' to '%s': %s",
+            message->header.frame_id.c_str(), frame_id_.c_str(),
+            exception.what());
+        return;
+      }
+    }
+    if (!std::isfinite(point.point.x) || !std::isfinite(point.point.y) ||
+        !std::isfinite(point.point.z)) {
+      return;
+    }
+
+    data::Point stored;
+    stored.x = point.point.x;
+    stored.y = point.point.y;
+    stored.z = point.point.z;
+    for (const data::Point& existing : clicked_points_) {
+      if (std::abs(existing.x - stored.x) < 1.0e-4 &&
+          std::abs(existing.y - stored.y) < 1.0e-4 &&
+          std::abs(existing.z - stored.z) < 1.0e-4) {
+        RCLCPP_DEBUG(get_logger(), "Ignoring duplicate point (%.3f, %.3f, %.3f)",
+                     stored.x, stored.y, stored.z);
+        return;
+      }
+    }
+    clicked_points_.push_back(stored);
+    RCLCPP_INFO(get_logger(), "Added point (%.3f, %.3f, %.3f); %zu total",
+                stored.x, stored.y, stored.z, clicked_points_.size());
+  }
+
   void UpdateCollisionMarkers() {
     if (!checker_ || !kinematics_ready_ ||
         latest_joint_positions_.size() != joint_names_.size()) {
       return;
     }
-    const CollisionCheckResult result =
-        checker_->CheckState(latest_joint_positions_, scene_);
+    // A second /joint_states source makes the collision pose (latest message)
+    // disagree with the robot the user sees in RViz; report it explicitly.
+    const auto now_time = std::chrono::steady_clock::now();
+    if (std::chrono::duration<double>(now_time - last_publisher_check_).count() >
+        2.0) {
+      last_publisher_check_ = now_time;
+      const auto joint_state_publishers =
+          get_publishers_info_by_topic("/joint_states");
+      if (joint_state_publishers.size() > 1) {
+        RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 5000,
+            "Multiple /joint_states publishers (%zu) detected; collision may "
+            "use a different robot pose than the RViz display",
+            joint_state_publishers.size());
+      }
+    }
+    std::vector<Obstacle> converted;
+    CollisionCheckResult result;
+    std::vector<std::string> colliding_links;
+    const ValidationResult obstacle_result =
+        ObstacleAdapter::Convert(scene_.objects, &converted);
+    if (!obstacle_result.ok) {
+      result.message = obstacle_result.message;
+    } else {
+      ObstacleList geometry_obstacles;
+      ObstacleList message_clouds;
+      for (const Obstacle& obstacle : converted) {
+        if (obstacle.cloud_points.empty()) {
+          geometry_obstacles.push_back(obstacle);
+        } else {
+          message_clouds.push_back(obstacle);
+        }
+      }
+
+      const bool has_clicked_cloud = !clicked_points_.empty();
+      Obstacle clicked_cloud;
+      if (has_clicked_cloud) {
+        clicked_cloud.id = kClickedPointCloudId;
+        // Points are already expressed in frame_id_, so the cloud obstacle
+        // itself sits at the origin.
+        clicked_cloud.center.x = 0.0;
+        clicked_cloud.center.y = 0.0;
+        clicked_cloud.center.z = 0.0;
+        clicked_cloud.cloud_points = clicked_points_;
+      }
+
+      // The interface selects one obstacle representation per query, so
+      // geometry obstacles and point clouds are checked separately and the
+      // first collision is reported. Self-collision runs once.
+      const CollisionCheckResult self_result =
+          checker_->CheckSelfCollision(latest_joint_positions_);
+      CollisionQueryOptions geometry_options;
+      geometry_options.collect_all_collisions = true;
+      CollisionCheckResult geometry_result;
+      geometry_result.valid = true;
+      if (!geometry_obstacles.empty()) {
+        geometry_result = checker_->CheckEnvironmentCollision(
+            latest_joint_positions_, geometry_obstacles, geometry_options);
+      }
+      CollisionCheckResult cloud_result;
+      cloud_result.valid = true;
+      if (has_clicked_cloud || !message_clouds.empty()) {
+        ObstacleList clouds = std::move(message_clouds);
+        if (has_clicked_cloud) {
+          clouds.push_back(clicked_cloud);
+        }
+        CollisionQueryOptions cloud_options;
+        cloud_options.obstacle_type = ObstacleType::kPointCloud;
+        cloud_options.point_cloud_resolution = point_cloud_resolution_;
+        cloud_options.collect_all_collisions = true;
+        cloud_result = checker_->CheckEnvironmentCollision(
+            latest_joint_positions_, clouds, cloud_options);
+      }
+
+      // Together the queries cover every colliding link, so adding a point
+      // that touches a new link highlights that link as well.
+      const auto append_colliding_links =
+          [&colliding_links](const CollisionCheckResult& source) {
+            if (!source.valid || !source.collision) {
+              return;
+            }
+            const auto append = [&colliding_links](const std::string& link) {
+              if (!link.empty() &&
+                  std::find(colliding_links.begin(), colliding_links.end(),
+                            link) == colliding_links.end()) {
+                colliding_links.push_back(link);
+              }
+            };
+            append(source.first_link);
+            for (const std::string& link : source.colliding_links) {
+              append(link);
+            }
+          };
+      append_colliding_links(self_result);
+      append_colliding_links(geometry_result);
+      append_colliding_links(cloud_result);
+
+      const bool invalid = !self_result.valid || !geometry_result.valid ||
+                           !cloud_result.valid;
+      if (self_result.valid && self_result.collision) {
+        result = self_result;
+      } else if (geometry_result.valid && geometry_result.collision) {
+        result = geometry_result;
+      } else if (cloud_result.valid && cloud_result.collision) {
+        result = cloud_result;
+      } else if (!invalid) {
+        result.valid = true;
+        result.collision = false;
+        result.message = "no collision detected";
+      } else {
+        result.message =
+            !self_result.valid
+                ? self_result.message
+                : (!geometry_result.valid ? geometry_result.message
+                                          : cloud_result.message);
+      }
+    }
 
     if (!result.valid) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
@@ -510,10 +724,52 @@ class CollisionVisualTestNode final : public rclcpp::Node {
                            result.message.c_str());
     }
 
-    if (!result.valid || !result.collision) {
-      // Clear only when the previous cycle showed a collision (or once at
-      // startup, to remove stale transient-local markers). This keeps the
-      // topic quiet while there is nothing to show.
+    const bool cloud_collision =
+        result.valid && result.collision &&
+        result.second_object == std::to_string(kClickedPointCloudId);
+    const bool has_points = !clicked_points_.empty();
+    const bool collision_now = result.valid && result.collision;
+
+    std::vector<std::string> sorted_links = colliding_links;
+    std::sort(sorted_links.begin(), sorted_links.end());
+    std::string link_list;
+    for (const std::string& link : sorted_links) {
+      link_list += " " + link;
+    }
+    if (collision_now != collision_active_) {
+      if (collision_now) {
+        RCLCPP_INFO(get_logger(),
+                    "Collision detected: %s (links:%s points=%zu)",
+                    result.message.c_str(), link_list.c_str(),
+                    clicked_points_.size());
+      } else {
+        RCLCPP_INFO(get_logger(), "Collision cleared");
+      }
+    } else if (collision_now && sorted_links != last_colliding_links_) {
+      RCLCPP_INFO(get_logger(), "Collision links updated:%s (points=%zu)",
+                  link_list.c_str(), clicked_points_.size());
+    }
+    last_colliding_links_ = collision_now ? sorted_links
+                                          : std::vector<std::string>{};
+
+    visualization_msgs::msg::MarkerArray markers;
+    if (result.valid && result.collision) {
+      // Highlight every colliding robot link. Self collisions add both links;
+      // environment collisions add every link that intersects an obstacle.
+      if (colliding_links.empty() && !result.first_link.empty()) {
+        colliding_links.push_back(result.first_link);
+      }
+      AppendRobotGeometryMarkers(colliding_links, &markers);
+      AppendCollisionText(result, &markers);
+      AppendObstacleHighlight(result, &markers);
+    }
+    if (has_points) {
+      AppendPointCloudMarkers(cloud_collision, &markers);
+    }
+
+    if (markers.markers.empty()) {
+      // Clear only when the previous cycle showed something (or once at
+      // startup, to remove stale transient-local markers).
       if (!cleared_once_ || collision_active_) {
         visualization_msgs::msg::MarkerArray clear;
         visualization_msgs::msg::Marker marker;
@@ -528,23 +784,54 @@ class CollisionVisualTestNode final : public rclcpp::Node {
       return;
     }
 
-    collision_active_ = true;
+    collision_active_ = result.valid && result.collision;
     cleared_once_ = true;
-    visualization_msgs::msg::MarkerArray markers;
-    AppendRobotGeometryMarkers(result.first_link, &markers);
-    AppendCollisionText(result, &markers);
-    AppendObstacleHighlight(result, &markers);
     collision_publisher_->publish(markers);
   }
 
+  void AppendPointCloudMarkers(bool colliding,
+                               visualization_msgs::msg::MarkerArray* markers) {
+    if (clicked_points_.empty()) {
+      return;
+    }
+    visualization_msgs::msg::Marker marker;
+    marker.header.frame_id = frame_id_;
+    marker.header.stamp = now();
+    marker.ns = "excavator_collision_test_points";
+    marker.id = 9200;
+    marker.type = visualization_msgs::msg::Marker::SPHERE_LIST;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose.orientation.w = 1.0;
+    marker.scale.x = point_marker_scale_;
+    marker.scale.y = point_marker_scale_;
+    marker.scale.z = point_marker_scale_;
+    // Orange while clear, bright red when this point cloud is the colliding
+    // obstacle.
+    marker.color = colliding ? MakeColor(1.0F, 0.0F, 0.0F, 0.95F)
+                             : MakeColor(1.0F, 0.55F, 0.0F, 0.85F);
+    marker.points.reserve(clicked_points_.size());
+    for (const data::Point& point : clicked_points_) {
+      geometry_msgs::msg::Point ros_point;
+      ros_point.x = point.x;
+      ros_point.y = point.y;
+      ros_point.z = point.z;
+      marker.points.push_back(ros_point);
+    }
+    markers->markers.push_back(std::move(marker));
+  }
+
   void AppendRobotGeometryMarkers(
-      const std::string& colliding_link,
+      const std::vector<std::string>& colliding_links,
       visualization_msgs::msg::MarkerArray* markers) {
     if (!robot_model_ready_ || !kinematics_) {
       return;
     }
     int32_t id = 0;
     for (const LinkCollisionGeometry& link : robot_model_.links()) {
+      if (std::find(colliding_links.begin(), colliding_links.end(),
+                    link.link_name) == colliding_links.end()) {
+        continue;
+      }
       Pose3 link_pose;
       if (!kinematics_
                ->GetLinkPose(latest_joint_positions_, link.link_name, &link_pose)
@@ -552,7 +839,6 @@ class CollisionVisualTestNode final : public rclcpp::Node {
         continue;
       }
       const Eigen::Isometry3d world_link = ToTransform(link_pose);
-      const bool is_colliding = link.link_name == colliding_link;
       for (const CollisionGeometryInstance& instance : link.geometries) {
         const Eigen::Isometry3d world_geometry =
             world_link * instance.link_to_collision;
@@ -563,10 +849,8 @@ class CollisionVisualTestNode final : public rclcpp::Node {
         marker.id = id++;
         marker.action = visualization_msgs::msg::Marker::ADD;
         marker.pose = ToRosPose(world_geometry);
-        // Bright red collision bodies; the actually colliding link is more
-        // opaque so it stands out even when several bodies are close.
-        marker.color = MakeColor(1.0F, 0.05F, 0.02F,
-                                 is_colliding ? 0.85F : 0.45F);
+        // Only the colliding link is drawn, in bright red.
+        marker.color = MakeColor(1.0F, 0.02F, 0.0F, 0.85F);
         if (!AppendGeometryShape(instance.geometry, &marker)) {
           continue;
         }
@@ -665,7 +949,9 @@ class CollisionVisualTestNode final : public rclcpp::Node {
       const CollisionCheckResult& result,
       visualization_msgs::msg::MarkerArray* markers) {
     for (const auto& object : scene_.objects) {
-      if (!object.enabled || object.id != result.second_object) {
+      if (!object.enabled ||
+          std::to_string(ObstacleAdapter::ObjectId(object.id)) !=
+              result.second_object) {
         continue;
       }
       if (!IsFinite(object.pose)) {
@@ -712,12 +998,16 @@ class CollisionVisualTestNode final : public rclcpp::Node {
   std::string tip_link_;
   std::unique_ptr<KinematicsModel> kinematics_;
   std::unique_ptr<CollisionChecker> checker_;
-  RobotCollisionModel robot_model_;
+  RobotCollisionGeometryModel robot_model_;
   bool robot_model_ready_{false};
   bool kinematics_ready_{false};
   bool dragging_tip_{false};
   bool collision_active_{false};
   bool cleared_once_{false};
+  std::vector<std::string> last_colliding_links_;
+  double point_cloud_resolution_{0.05};
+  double point_marker_scale_{0.06};
+  std::vector<data::Point> clicked_points_;
 
   JointPositions latest_joint_positions_;
   excavator_interfaces::msg::PlanningScene scene_;
@@ -732,10 +1022,17 @@ class CollisionVisualTestNode final : public rclcpp::Node {
       scene_subscription_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr
       manual_target_subscription_;
+  rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr
+      clicked_point_subscription_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr
+      clear_cloud_subscription_;
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
   rclcpp::TimerBase::SharedPtr check_timer_;
 
   std::chrono::steady_clock::time_point last_ik_time_{};
   std::chrono::steady_clock::time_point last_marker_sync_{};
+  std::chrono::steady_clock::time_point last_publisher_check_{};
 };
 
 }  // namespace excavator_visualization

@@ -25,10 +25,10 @@ bool IsAllZero(const std::vector<double>& values) {
 }
 
 void StripZeroVelocityAcceleration(
-    tramcar::planning::JointTrajectory* trajectory) {
+    excavator::planning::JointTrajectory* trajectory) {
   const bool has_motion_profile = std::any_of(
       trajectory->points.begin(), trajectory->points.end(),
-      [](const tramcar::planning::JointTrajectoryPoint& point) {
+      [](const excavator::planning::JointTrajectoryPoint& point) {
         return !IsAllZero(point.velocities) ||
                !IsAllZero(point.accelerations);
       });
@@ -42,7 +42,7 @@ void StripZeroVelocityAcceleration(
 }
 
 trajectory_msgs::msg::JointTrajectory ToRosTrajectory(
-    const tramcar::planning::JointTrajectory& trajectory) {
+    const excavator::planning::JointTrajectory& trajectory) {
   trajectory_msgs::msg::JointTrajectory message;
   message.joint_names = trajectory.joint_names;
   message.points.reserve(trajectory.points.size());
@@ -82,14 +82,14 @@ class CsvExecuteNode final : public rclcpp::Node {
       throw std::invalid_argument("trajectory_file parameter is required");
     }
 
-    tramcar::planning::JointTrajectory trajectory;
+    excavator::planning::JointTrajectory trajectory;
     std::string error;
     if (!replay_manager_.LoadTrajectory(file, &trajectory, &error)) {
       throw std::runtime_error("failed to load trajectory: " + error);
     }
     StripZeroVelocityAcceleration(&trajectory);
     const auto validation =
-        tramcar::planning::ValidateJointTrajectory(trajectory);
+        excavator::planning::ValidateJointTrajectory(trajectory);
     if (!validation.ok) {
       throw std::runtime_error("trajectory is invalid: " + validation.message);
     }
@@ -174,7 +174,7 @@ class CsvExecuteNode final : public rclcpp::Node {
     client_->async_send_goal(goal, options);
   }
 
-  tramcar::planning::visualization::ReplayManager replay_manager_;
+  excavator::planning::visualization::ReplayManager replay_manager_;
   trajectory_msgs::msg::JointTrajectory trajectory_;
   bool initialize_to_start_{false};
   rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr

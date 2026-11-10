@@ -4,7 +4,7 @@
 #include <cmath>
 #include <utility>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -110,4 +110,4 @@ MeasuredSampleAlignment MeasuredCurveAligner::Update(
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

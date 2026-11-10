@@ -10,7 +10,7 @@
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/vector3.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 
@@ -55,6 +55,6 @@ class PlanningSceneManager {
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_VISUALIZATION__PLANNING_SCENE_MANAGER_HPP_

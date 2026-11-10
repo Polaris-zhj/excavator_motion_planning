@@ -10,7 +10,7 @@
 
 #include "excavator_common/joint_trajectory.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 enum class CollisionGeometryType {
@@ -47,13 +47,13 @@ struct LinkCollisionGeometry {
 };
 
 // Project-owned collision description. It deliberately contains no FCL types
-// and does not calculate link poses. KinematicsModel and RobotCollisionModel
+// and does not calculate link poses. KinematicsModel and RobotCollisionGeometryModel
 // remain independent and are joined by link_name at query time.
 //
 // The robot collision geometry is loaded from YAML; no URDF parsing happens
 // here. The referenced link frames must be the frames produced by the selected
 // KinematicsModel (for example the physical link frames of the DH model).
-class RobotCollisionModel {
+class RobotCollisionGeometryModel {
  public:
   ValidationResult InitializeFromYaml(
       const std::string& yaml,
@@ -81,6 +81,6 @@ class RobotCollisionModel {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COLLISION__ROBOT_COLLISION_MODEL_HPP_

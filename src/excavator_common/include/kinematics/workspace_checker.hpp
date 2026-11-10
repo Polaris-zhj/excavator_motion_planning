@@ -6,7 +6,7 @@
 
 #include "kinematics/kinematics_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct WorkspaceBox {
@@ -47,6 +47,6 @@ class WorkspaceChecker {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // KINEMATICS__WORKSPACE_CHECKER_HPP_

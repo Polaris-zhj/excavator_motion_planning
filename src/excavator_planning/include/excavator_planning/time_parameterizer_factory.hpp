@@ -8,7 +8,7 @@
 
 #include "excavator_common/planner_interfaces.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct TimeParameterizerOptions {
@@ -27,6 +27,6 @@ std::unique_ptr<TimeParameterizer> CreateTimeParameterizer(
 std::vector<std::string> TimeParameterizerNames();
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_PLANNING__TIME_PARAMETERIZER_FACTORY_HPP_

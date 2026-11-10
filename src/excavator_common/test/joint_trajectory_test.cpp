@@ -4,7 +4,7 @@
 
 #include <limits>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -101,4 +101,4 @@ TEST(JointTrajectoryValidationTest, RejectsNonFinitePosition) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

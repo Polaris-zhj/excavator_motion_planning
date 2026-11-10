@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -400,4 +400,4 @@ TimeParameterizationResponse SimpleTimeParameterizer::Parameterize(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

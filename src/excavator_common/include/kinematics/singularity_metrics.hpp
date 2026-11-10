@@ -10,7 +10,7 @@
 
 #include "kinematics/kinematics_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct SingularityMetrics {
@@ -65,6 +65,6 @@ inline SingularityMetrics EvaluateSingularity(const Jacobian& jacobian,
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // KINEMATICS__SINGULARITY_METRICS_HPP_

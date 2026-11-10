@@ -1,4 +1,4 @@
-#include "excavator_collision/robot_collision_model.hpp"
+#include "excavator_collision/robot_collision_geometry_model.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -11,7 +11,7 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <yaml-cpp/yaml.h>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -322,7 +322,7 @@ ValidationResult ParseGeometry(const YAML::Node& node,
 
 }  // namespace
 
-ValidationResult RobotCollisionModel::InitializeFromYaml(
+ValidationResult RobotCollisionGeometryModel::InitializeFromYaml(
     const std::string& yaml,
     const std::vector<std::string>& planning_joint_names,
     const std::string& reference_frame,
@@ -458,7 +458,7 @@ ValidationResult RobotCollisionModel::InitializeFromYaml(
   return {true, ""};
 }
 
-ValidationResult RobotCollisionModel::InitializeFromYamlFile(
+ValidationResult RobotCollisionGeometryModel::InitializeFromYamlFile(
     const std::string& path,
     const std::vector<std::string>& planning_joint_names,
     const std::string& reference_frame) {
@@ -481,4 +481,4 @@ ValidationResult RobotCollisionModel::InitializeFromYamlFile(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

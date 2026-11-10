@@ -7,7 +7,7 @@
 #include "kinematics/dh_parameters.hpp"
 #include "kinematics/kinematics_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Modified-DH kinematics backend. It does not parse URDF; it is configured by
@@ -54,6 +54,6 @@ class DhKinematicsModel final : public KinematicsModel {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // KINEMATICS__DH_KINEMATICS_MODEL_HPP_

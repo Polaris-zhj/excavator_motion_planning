@@ -5,7 +5,7 @@
 
 #include "excavator_common/planner_interfaces.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Time-optimal rest-to-rest parameterization backed by TOPP-RA.
@@ -27,6 +27,6 @@ class ToppraTimeParameterizer final : public TimeParameterizer {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_PLANNING__TOPPRA_TIME_PARAMETERIZER_HPP_

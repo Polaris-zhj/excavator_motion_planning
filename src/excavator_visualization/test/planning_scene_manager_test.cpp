@@ -4,7 +4,7 @@
 
 #include "shape_msgs/msg/solid_primitive.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -86,4 +86,4 @@ TEST(PlanningSceneManagerTest, ClearRemovesAllObjects) {
 }  // namespace
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

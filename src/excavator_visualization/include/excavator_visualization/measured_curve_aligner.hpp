@@ -3,7 +3,7 @@
 
 #include "excavator_common/robot_state.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 
@@ -64,6 +64,6 @@ class MeasuredCurveAligner {
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_VISUALIZATION__MEASURED_CURVE_ALIGNER_HPP_

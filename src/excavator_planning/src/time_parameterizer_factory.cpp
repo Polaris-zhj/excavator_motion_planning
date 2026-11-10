@@ -3,7 +3,7 @@
 #include "excavator_planning/baseline_planners.hpp"
 #include "excavator_planning/toppra_time_parameterizer.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 std::unique_ptr<TimeParameterizer> CreateTimeParameterizer(
@@ -26,4 +26,4 @@ std::vector<std::string> TimeParameterizerNames() {
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

@@ -20,7 +20,7 @@
 
 #include "toppra/src/toppra.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -317,4 +317,4 @@ TimeParameterizationResponse ToppraTimeParameterizer::Parameterize(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

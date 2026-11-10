@@ -16,8 +16,9 @@
 #include <vector>
 
 #include "builtin_interfaces/msg/duration.hpp"
-#include "excavator_collision/collision_checker.hpp"
+#include "excavator_collision/fcl_collision_checker.hpp"
 #include "excavator_collision/collision_checker_factory.hpp"
+#include "excavator_collision/obstacle_adapter.hpp"
 #include "excavator_common/include/g3log.h"
 #include "excavator_common/planner_interfaces.hpp"
 #include "excavator_interfaces/action/plan_trajectory.hpp"
@@ -39,7 +40,7 @@
 #include "visualization_msgs/msg/marker_array.hpp"
 
 namespace excavator_planning {
-using namespace tramcar::planning;
+using namespace excavator::planning;
 namespace {
 
 using PlanAction = excavator_interfaces::action::PlanTrajectory;
@@ -281,12 +282,12 @@ class PlanningServer final : public rclcpp::Node {
         declare_parameter<double>("planner_goal_tolerance", 0.15);
     const int planner_random_seed =
         declare_parameter<int>("planner_random_seed", 42);
+    // The old coarse-box filter masked real bucket/chassis contacts. With the
+    // current mesh collision model, non-adjacent pairs are checked by default;
+    // structural exceptions can still be supplied through the parameter.
     const std::vector<std::string> allowed_collision_pairs =
         declare_parameter<std::vector<std::string>>(
-            "allowed_collision_pairs",
-            {"base_link:boom_link", "base_link:stick_link",
-             "base_link:bucket_link", "swing_link:stick_link",
-             "swing_link:bucket_link"});
+            "allowed_collision_pairs", std::vector<std::string>{});
 
     ValidationResult load_result;
     if (kinematics_backend == "dh") {
@@ -379,7 +380,10 @@ class PlanningServer final : public rclcpp::Node {
               allowed_pairs.emplace_back(entry.substr(0, separator),
                                          entry.substr(separator + 1));
             }
-            collision_checker_->SetAllowedCollisionPairs(allowed_pairs);
+            for (const auto& pair : allowed_pairs) {
+              collision_checker_->SetAllowedCollision(pair.first, pair.second,
+                                                      true);
+            }
             if (max_detour_attempts < 0 || planner_max_iterations <= 0 ||
                 !std::isfinite(planner_step_size) || planner_step_size <= 0.0 ||
                 !std::isfinite(planner_goal_bias) || planner_goal_bias < 0.0 ||
@@ -410,7 +414,7 @@ class PlanningServer final : public rclcpp::Node {
                 planner_loader_ =
                     std::make_unique<pluginlib::ClassLoader<PlannerPlugin>>(
                         "excavator_planning",
-                        "tramcar::planning::PlannerPlugin");
+                        "excavator::planning::PlannerPlugin");
                 path_planner_ =
                     planner_loader_->createSharedInstance(planner_class_);
                 path_planner_->Configure(settings);
@@ -589,7 +593,9 @@ class PlanningServer final : public rclcpp::Node {
     const std::string scene_frame =
         scene.header.frame_id.empty() ? "world" : scene.header.frame_id;
     for (const auto& object : scene.objects) {
-      if (!object.enabled || object.id != collision.second_object) {
+      if (!object.enabled ||
+          std::to_string(ObstacleAdapter::ObjectId(object.id)) !=
+              collision.second_object) {
         continue;
       }
       visualization_msgs::msg::Marker highlight;
@@ -784,8 +790,17 @@ class PlanningServer final : public rclcpp::Node {
 
     const excavator_interfaces::msg::PlanningScene scene =
         ResolveScene(goal->planning_scene);
+    std::vector<Obstacle> obstacles;
+    const ValidationResult obstacle_result =
+        ObstacleAdapter::Convert(scene.objects, &obstacles);
+    if (!obstacle_result.ok) {
+      result->success = false;
+      result->message = "invalid planning scene: " + obstacle_result.message;
+      goal_handle->abort(result);
+      return;
+    }
     const CollisionCheckResult start_check =
-        collision_checker_->CheckState(start, scene);
+        collision_checker_->CheckCollision(start, obstacles);
     if (!start_check.valid || start_check.collision) {
       PublishCollisionMarkers(start_check, scene);
       result->success = false;
@@ -794,7 +809,7 @@ class PlanningServer final : public rclcpp::Node {
       return;
     }
     const CollisionCheckResult goal_check =
-        collision_checker_->CheckState(target, scene);
+        collision_checker_->CheckCollision(target, obstacles);
     if (!goal_check.valid || goal_check.collision) {
       PublishCollisionMarkers(goal_check, scene);
       result->success = false;
@@ -802,23 +817,24 @@ class PlanningServer final : public rclcpp::Node {
       goal_handle->abort(result);
       return;
     }
-    auto state_validity = [this, scene](const JointPositions& positions,
-                                        std::string* message) {
+    auto state_validity = [this, obstacles](const JointPositions& positions,
+                                            std::string* message) {
       const CollisionCheckResult check =
-          collision_checker_->CheckState(positions, scene);
+          collision_checker_->CheckCollision(positions, obstacles);
       if (message != nullptr) {
         *message = check.message;
       }
       return check.valid && !check.collision;
     };
-    auto segment_validity = [this, scene](const JointPositions& start_positions,
-                                          const JointPositions& goal_positions,
-                                          std::string* message) {
+    auto segment_validity = [this, obstacles](
+                                const JointPositions& start_positions,
+                                const JointPositions& goal_positions,
+                                std::string* message) {
       JointPath segment;
       segment.joint_names = joint_names_;
       segment.points = {start_positions, goal_positions};
-      const CollisionCheckResult check = collision_checker_->CheckPath(
-          segment, scene, max_collision_joint_step_);
+      const CollisionCheckResult check = collision_checker_->CheckPathCollision(
+          segment, obstacles, max_collision_joint_step_);
       if (message != nullptr) {
         *message = check.message;
       }
@@ -864,8 +880,8 @@ class PlanningServer final : public rclcpp::Node {
       }
       const JointPath straight = MakeStraightPath(
           request.start, request.goal, joint_names_, max_collision_joint_step_);
-      const CollisionCheckResult straight_check = collision_checker_->CheckPath(
-          straight, scene, max_collision_joint_step_);
+      const CollisionCheckResult straight_check = collision_checker_->CheckPathCollision(
+          straight, obstacles, max_collision_joint_step_);
       if (straight_check.collision) {
         PublishCollisionMarkers(straight_check, scene);
       }
@@ -921,8 +937,8 @@ class PlanningServer final : public rclcpp::Node {
         "checking sampled path segments for self and environment collisions";
     goal_handle->publish_feedback(feedback);
 
-    const CollisionCheckResult path_collision = collision_checker_->CheckPath(
-        processed_path, scene, max_collision_joint_step_);
+    const CollisionCheckResult path_collision = collision_checker_->CheckPathCollision(
+        processed_path, obstacles, max_collision_joint_step_);
     if (!path_collision.valid || path_collision.collision) {
       PublishCollisionMarkers(path_collision, scene);
       result->success = false;
@@ -965,7 +981,8 @@ class PlanningServer final : public rclcpp::Node {
     goal_handle->publish_feedback(feedback);
 
     const CollisionCheckResult trajectory_collision =
-        collision_checker_->CheckTrajectory(time_response.trajectory, scene,
+        collision_checker_->CheckTrajectory(time_response.trajectory,
+                                            obstacles,
                                             max_collision_joint_step_);
     if (!trajectory_collision.valid || trajectory_collision.collision) {
       PublishCollisionMarkers(trajectory_collision, scene);

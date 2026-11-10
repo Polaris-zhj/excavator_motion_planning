@@ -7,7 +7,7 @@
 
 #include <yaml-cpp/yaml.h>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -210,4 +210,4 @@ std::vector<std::string> DhParameters::JointNames() const {
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

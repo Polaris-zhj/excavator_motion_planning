@@ -21,6 +21,7 @@ add_library(excavator_common
   src/workspace_checker.cpp
 )
 target_include_directories(excavator_common PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -60,6 +61,8 @@ install(TARGETS excavator_common EXPORT excavator_commonTargets
   RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY data/ DESTINATION include/data
+  FILES_MATCHING PATTERN "*.h")
 ament_export_targets(excavator_commonTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
 ament_export_dependencies(Eigen3 urdf yaml-cpp)

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <utility>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -293,4 +293,4 @@ PlotSeries TrajectoryPlotData::ActualSeries(std::size_t joint,
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

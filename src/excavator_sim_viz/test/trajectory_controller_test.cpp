@@ -11,7 +11,7 @@
 #include "excavator_sim_viz/kinematic_simulator.hpp"
 #include "excavator_sim_viz/velocity_tracking_controller.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -283,4 +283,4 @@ TEST(TrajectoryControllerTest, ContinuousUpdateReplacesActiveTrajectory) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

@@ -11,7 +11,7 @@
 
 #include "pluginlib/class_list_macros.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -372,7 +372,7 @@ PlanningResponse RrtStarPlanner::Plan(const PlanningRequest& request) {
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
-PLUGINLIB_EXPORT_CLASS(tramcar::planning::RrtStarPlanner,
-                       tramcar::planning::PlannerPlugin)
+PLUGINLIB_EXPORT_CLASS(excavator::planning::RrtStarPlanner,
+                       excavator::planning::PlannerPlugin)

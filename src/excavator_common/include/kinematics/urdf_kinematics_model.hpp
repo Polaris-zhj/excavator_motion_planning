@@ -8,7 +8,7 @@
 
 #include "kinematics/kinematics_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // URDF-backed, stateless kinematics for a configured ordered joint group.
@@ -46,6 +46,6 @@ class UrdfKinematicsModel final : public KinematicsModel {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // KINEMATICS__URDF_KINEMATICS_MODEL_HPP_

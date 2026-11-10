@@ -25,6 +25,8 @@ find_package(excavator_collision REQUIRED)
 find_package(excavator_interfaces REQUIRED)
 find_package(urdf REQUIRED)
 find_package(interactive_markers REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
@@ -85,9 +87,9 @@ target_compile_options(target_marker_node PRIVATE -Wall -Wextra -Wpedantic)
 add_executable(collision_visual_test_node
   src/collision_visual_test_node.cpp)
 ament_target_dependencies(collision_visual_test_node
-  rclcpp geometry_msgs sensor_msgs shape_msgs visualization_msgs
-  interactive_markers excavator_common excavator_collision
-  excavator_interfaces)
+  rclcpp geometry_msgs sensor_msgs shape_msgs visualization_msgs std_msgs
+  interactive_markers tf2_ros tf2_geometry_msgs excavator_common
+  excavator_collision excavator_interfaces)
 target_link_libraries(collision_visual_test_node
   excavator_common::excavator_common
   excavator_collision::excavator_collision)

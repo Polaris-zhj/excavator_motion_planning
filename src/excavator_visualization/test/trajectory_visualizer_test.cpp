@@ -8,7 +8,7 @@
 
 #include "kinematics/urdf_kinematics_model.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -132,4 +132,4 @@ TEST_F(TrajectoryVisualizerTest, RejectsIncompleteOccupancyVisuals) {
 }  // namespace
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

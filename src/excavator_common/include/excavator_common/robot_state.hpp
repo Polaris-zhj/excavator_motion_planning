@@ -3,7 +3,7 @@
 
 #include "excavator_common/joint_trajectory.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct RobotState {
@@ -52,6 +52,6 @@ inline const char* ToString(ExecutionState state) {
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COMMON__ROBOT_STATE_HPP_

@@ -6,7 +6,7 @@
 
 #include "excavator_common/joint_trajectory.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Optional collision/validity query supplied by the planning pipeline. It
@@ -69,6 +69,6 @@ class TrajectoryInterpolator {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COMMON__PLANNER_INTERFACES_HPP_

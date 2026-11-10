@@ -7,7 +7,7 @@
 #include "excavator_common/joint_trajectory.hpp"
 #include "excavator_common/robot_state.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 
@@ -35,6 +35,6 @@ class ReplayManager {
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_VISUALIZATION__REPLAY_MANAGER_HPP_

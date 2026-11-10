@@ -8,7 +8,7 @@
 
 #include "excavator_collision/collision_checker_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 using CollisionCheckerCreator =
@@ -35,6 +35,6 @@ class CollisionCheckerFactory {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COLLISION__COLLISION_CHECKER_FACTORY_HPP_

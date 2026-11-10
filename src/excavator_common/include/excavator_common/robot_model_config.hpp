@@ -8,7 +8,7 @@
 
 #include "excavator_common/joint_limits.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct RobotModelConfig {
@@ -44,6 +44,6 @@ struct RobotModelConfig {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COMMON__ROBOT_MODEL_CONFIG_HPP_

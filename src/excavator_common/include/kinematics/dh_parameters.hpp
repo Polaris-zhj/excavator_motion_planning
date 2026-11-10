@@ -9,7 +9,7 @@
 
 #include "excavator_common/joint_trajectory.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct DhJoint {
@@ -46,6 +46,6 @@ struct DhParameters {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // KINEMATICS__DH_PARAMETERS_HPP_

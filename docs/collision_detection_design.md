@@ -16,10 +16,12 @@
 3. 检测机器人自碰撞和机器人与环境障碍物之间的碰撞。
 4. 支持单个关节状态、离散关节路径和关节轨迹检测。
 5. 支持查询机器人与指定障碍物之间的最小距离。
-6. 将 FCL 0.7.0 的核心算法移植到 `collision_detection/third_library/fcl/` 并构建为本地静态库，避免运行时依赖系统 FCL，同时不让 FCL 类型进入规划层的公共接口。
-7. 为后续自研碰撞算法保留替换入口，通过工厂注册和配置选择后端，不修改规划器的调用逻辑。
+6. 将 FCL 0.7.0 的核心算法移植到 `third_library/fcl/` 并构建为本地静态库，避免运行时依赖系统 FCL，同时不让 FCL 类型进入规划层的公共接口。
+7. 支持几何障碍物与点云障碍物两种表示：几何体转换为保守 AABB，点云体素化为 OctoMap `OcTree` 后参与 FCL 查询。
+8. 支持可选地收集全部碰撞连杆（`collect_all_collisions`），供可视化高亮使用；规划默认首次碰撞即返回。
+9. 为后续自研碰撞算法保留替换入口，通过工厂注册和配置选择后端，不修改规划器的调用逻辑。
 
-第一版不承担液压动力学、接触力计算、连续时间碰撞证明或感知算法本身。碰撞检测只使用传入的几何描述和位姿。
+第一版不承担液压动力学、接触力计算、连续时间碰撞证明、动态障碍物预测或感知算法本身。碰撞检测只使用传入的几何描述、点云和位姿。
 
 ## 2. 总体架构
 
@@ -29,15 +31,17 @@
 flowchart TD
     PS[PlanningServer] --> Factory[CollisionCheckerFactory]
     Factory --> CI[CollisionChecker interface]
-    CI --> Impl[FclCollisionChecker]
-    Impl --> KM[KinematicsModel / DhKinematicsModel]
-    Impl --> RCM[RobotCollisionModel]
-    Impl --> FCM[FclCollisionModel]
-    YAML[robot_collision_model.yaml] --> RCM
-    RCM -->|项目自有几何模型| FCM
-    KM -->|各 link 的 FK 位姿| FCM
-    Scene[PlanningScene] --> FCM
-    FCM --> FCL[本地 vendored FCL]
+    CI --> C[FclCollisionChecker]
+    C --> A[FclCollisionModelBuilder]
+    A --> KM[KinematicsModel / DhKinematicsModel]
+    A --> RCM[RobotCollisionGeometryModel]
+    YAML[excavator_collision.yaml] --> RCM
+    RCM -->|项目自有几何模型| A
+    KM -->|各 link 的 FK 位姿| A
+    Msg[PlanningScene / CollisionObject] --> Adapter[ObstacleAdapter]
+    Adapter --> Scene[ObstacleList / data::Object]
+    Scene --> C
+    C --> FCL[本地 vendored FCL + OctoMap OcTree]
     FCL --> Result[CollisionCheckResult / DistanceResult]
     Result --> PS
 ```
@@ -45,8 +49,8 @@ flowchart TD
 这里有三个必须保持的边界：
 
 - **KinematicsModel**：只负责运动学计算，输入关节位置，输出指定连杆的位姿。规划默认使用 Modified-DH 实现。
-- **RobotCollisionModel**：从 YAML 读取机器人碰撞几何体、几何体相对连杆的固定局部位姿以及连杆关系，不计算 FK，也不包含 FCL 类型。
-- **FclCollisionModel**：负责把项目自己的碰撞几何描述转换为 FCL 几何对象，并执行 FCL 碰撞/距离查询。
+- **RobotCollisionGeometryModel**：从 YAML 读取机器人碰撞几何体、几何体相对连杆的固定局部位姿以及连杆关系，不计算 FK，也不包含 FCL 类型。
+- **FclCollisionModelBuilder**：FCL 适配器，持有 `RobotCollisionGeometryModel` 和 `KinematicsModel`，把关节位置转换为连杆碰撞信息；不执行碰撞或距离查询。
 
 `FclCollisionChecker` 是三者之间的协调层。规划服务只依赖 `CollisionChecker` 抽象接口，不直接调用 FCL。
 
@@ -56,25 +60,25 @@ flowchart TD
 src/excavator_collision/
 ├── include/excavator_collision/
 │   ├── collision_checker_interface.hpp
-│   ├── collision_checker.hpp
+│   ├── fcl_collision_checker.hpp
 │   ├── collision_checker_factory.hpp
-│   └── robot_collision_model.hpp
-├── collision_detection/
-│   ├── README.md
-│   ├── src/
-│   │   ├── collision_checker.cpp
-│   │   └── robot_collision_model.cpp
-│   └── third_library/
-│       ├── fcl_collision_model.hpp   # 项目 FCL 适配层
-│       ├── fcl_collision_model.cpp
-│       └── fcl/                      # 移植的 FCL 0.7.0 上游源码与 CMake
-│           ├── include/fcl/          # 上游公共头文件
-│           ├── src/                  # broadphase / narrowphase / geometry / math
-│           ├── CMakeLists.txt        # 构建静态库 excavator_fcl
-│           ├── LICENSE
-│           └── README.md
+│   ├── obstacle_adapter.hpp
+│   └── robot_collision_geometry_model.hpp
 ├── src/
+│   ├── fcl_collision_checker.cpp
+│   ├── robot_collision_geometry_model.cpp
+│   ├── obstacle_adapter.cpp
+│   ├── fcl_collision_model_builder.hpp   # 项目 FCL 适配层
+│   ├── fcl_collision_model_builder.cpp
 │   └── collision_checker_factory.cpp
+├── third_library/
+│   └── fcl/                      # 移植的 FCL 0.7.0 上游源码与 CMake
+│       ├── include/fcl/          # 上游公共头文件
+│       ├── src/                  # broadphase / narrowphase / geometry / math
+│       ├── CMakeLists.txt        # 构建静态库 excavator_fcl
+│       ├── LICENSE
+│       └── README.md
+├── README.md
 └── test/
     ├── collision_checker_test.cpp
     ├── collision_checker_factory_test.cpp
@@ -86,15 +90,16 @@ src/excavator_collision/
 | 文件/目录 | 职责 |
 | --- | --- |
 | `collision_checker_interface.hpp` | 定义项目级碰撞查询接口、输入配置和结果类型 |
-| `collision_checker.hpp` | YAML + 本地 FCL 后端的公开声明 |
+| `fcl_collision_checker.hpp` | YAML + 本地 FCL 后端的公开声明 |
 | `collision_checker_factory.hpp/.cpp` | 注册并创建碰撞检测后端 |
-| `RobotCollisionModel` | 从 YAML 加载机器人碰撞几何描述 |
-| `collision_detection/src/collision_checker.cpp` | 调用 FK、组织碰撞查询、路径离散采样 |
-| `third_library/fcl_collision_model.*` | FCL 类型转换、FCL 对象构造、碰撞和距离计算 |
+| `obstacle_adapter.hpp/.cpp` | 将 `CollisionObject`/`PlanningScene` 转换为 `data::Object`，处理 ID、AABB 展开和点云解析 |
+| `RobotCollisionGeometryModel` | 从 YAML 加载机器人碰撞几何描述 |
+| `src/fcl_collision_checker.cpp` | 调用 FK、构建环境（含 OctoMap）、执行碰撞/距离查询、路径离散采样 |
+| `src/fcl_collision_model_builder.*` | FCL 几何转换与连杆碰撞对象构建；不执行碰撞或距离查询 |
 | `third_library/fcl/` | 移植的 FCL 0.7.0 核心算法，构建为 `excavator_fcl` 静态库并私有链接 |
 | `test/` | 碰撞检测、工厂注册和性能测试 |
 
-`third_library/fcl_collision_model.*` 是项目自己的 FCL 适配代码；
+`src/fcl_collision_model_builder.*` 是项目自己的 FCL 适配代码；
 `third_library/fcl/` 是移植的上游 FCL 源码，不要求系统安装 `libfcl-dev`。
 FCL 静态库只链接进 `libexcavator_collision.so`，公共头文件不暴露 FCL 类型。
 
@@ -126,9 +131,9 @@ collision_checker_->Initialize(collision_config, kinematics_.get());
 
 该指针由碰撞检测器借用，不转移所有权；运动学对象必须比碰撞检测器活得更久。当前 `PlanningServer` 将二者作为成员持有，析构顺序也保证碰撞检测器先于运动学对象释放。
 
-### 3.2 RobotCollisionModel
+### 3.2 RobotCollisionGeometryModel
 
-`RobotCollisionModel` 是项目自己的机器人碰撞模型，核心数据包括：
+`RobotCollisionGeometryModel` 是项目自己的机器人碰撞模型，核心数据包括：
 
 - `link_name`：碰撞几何体所属连杆名称；
 - `parent_link_name`：可选的直接父连杆，仅用于自碰撞相邻连杆过滤；
@@ -167,25 +172,32 @@ links:
 > 一致（`dh_kinematics_test` 会校验）。若 DH 参数存在平移偏差，碰撞几何会与
 > RViz 中可见的挖机错位，拖动障碍物到挖机表面时可能无法触发碰撞。
 
-### 3.3 FclCollisionModel
+### 3.3 FclCollisionModelBuilder
 
-`FclCollisionModel` 负责 FCL 相关工作：
+`FclCollisionModelBuilder` 是机器人模型的 FCL 适配器，内部持有 `RobotCollisionGeometryModel` 和
+`KinematicsModel`：
 
-1. 将项目几何类型转换成 `fcl::Boxd`、`fcl::Sphered`、`fcl::Cylinderd` 或三角网格 BVH。
-2. 保存机器人几何资源。
-3. 每次查询时结合 FK 位姿构造当前世界坐标系下的 FCL 碰撞对象。
-4. 构造环境障碍物对象。
-5. 调用 FCL 的碰撞或距离查询。
-6. 将计算结果转换成项目自己的结果结构。
+1. 将项目几何类型转换成 `fcl::Boxd`、`fcl::Sphered`、`fcl::Cylinderd`、
+   `fcl::Capsuled` 或三角网格 BVH。
+2. 保存机器人几何资源、关节顺序和运动学模型指针。
+3. `ComputeLinkCollisionObjects(q)` 调用 `GetLinkPose()` 计算 FK，结合连杆局部变换，
+   直接返回每个碰撞几何体的 `LinkCollisionInfo`（连杆名、父连杆名、世界位姿下的
+   FCL `CollisionObject`）。
 
-FCL 对象不暴露给 Planner 或其他业务层。
+`FclCollisionModelBuilder` 不构造环境障碍物，也不调用 `fcl::collide` 或 `fcl::distance`。
+环境 Octree 构建、自碰撞/环境碰撞查询、距离查询和结果组装全部在
+`FclCollisionChecker` 中实现。FCL 对象不暴露给 Planner 或其他业务层。
+
+单状态查询（`CheckCollision` / `CheckEnvironmentCollision`）会为当前关节位置重新
+计算连杆 FCL 对象；路径查询（`CheckPathCollision`）只在每个采样状态更新连杆对象，
+环境对象（包括点云 Octree）在整条路径上只构建一次。
 
 ### 3.4 坐标系约定
 
 脱离 URDF 后不再存在隐式 frame 树。YAML 的 `robot.root_frame` 同时定义：
 
 - `KinematicsModel::GetLinkPose()` 返回位姿的参考坐标系；
-- `PlanningScene` 中环境障碍物位姿的参考坐标系；
+- `data::Object` 障碍物的 `center`（由 `ObstacleAdapter` 从消息 pose 转换）的参考坐标系；
 - 碰撞几何体最终位姿的根坐标系。
 
 当前 DH 与 URDF 运动学后端都输出 `base_link` 下的位姿，因此默认：
@@ -208,8 +220,9 @@ T_root_collision = T_root_link * T_link_collision
 
 `CollisionModelConfig::kinematics_reference_frame` 默认是 `base_link`。初始化时若
 YAML `root_frame` 与之不一致会直接报错，而不是猜测或执行隐式坐标变换。当前模块不主动
-查询 TF；`PlanningScene.header.frame_id` 为空时允许直接使用，否则必须与 `root_frame`
-一致。
+查询 TF；`ObstacleAdapter` 也不做 frame 转换，调用方需要保证障碍物位姿（以及点云坐标）
+已经表达在 `root_frame` 下。可视化测试节点会先用 TF 把 RViz 点击点转换到 `base_link`，
+再交给碰撞检查器。
 
 ## 4. 初始化与运行流程
 
@@ -221,17 +234,18 @@ sequenceDiagram
     participant F as CollisionCheckerFactory
     participant C as FclCollisionChecker
     participant K as KinematicsModel
-    participant R as RobotCollisionModel
-    participant A as FclCollisionModel
+    participant R as RobotCollisionGeometryModel
+    participant A as FclCollisionModelBuilder
 
     P->>K: 初始化 DH 运动学（或 URDF）
     P->>F: Create(collision_backend)
     F-->>P: CollisionChecker
     P->>C: Initialize(config, KinematicsModel*)
-    C->>R: InitializeFromYaml(YAML, joints, reference_frame)
-    R-->>C: 项目自有几何模型
-    C->>A: Initialize(RobotCollisionModel)
-    A-->>C: FCL 几何资源构建完成
+    C->>A: Initialize(config, KinematicsModel*)
+    A->>R: InitializeFromYaml(YAML, joints, reference_frame)
+    R-->>A: 项目自有几何模型
+    A->>A: 构建 FCL 几何资源
+    A-->>C: 初始化结果
     C-->>P: 初始化结果
 ```
 
@@ -240,12 +254,17 @@ sequenceDiagram
 | 配置项 | 当前值/用途 |
 | --- | --- |
 | `collision_backend` | 默认 `fcl`，选择碰撞算法实现 |
+| `collision_model_file` | 启动参数，指向机器人碰撞 YAML；规划服务读取后写入 `model_source` |
 | `model_format` | 当前为 `yaml`，表示碰撞几何来源是 YAML |
 | `model_source` | 机器人碰撞 YAML 文本 |
 | `model_base_directory` | 解析相对 mesh 路径时使用 |
 | `joint_names` | 当前规划使用的主动关节顺序 |
 | `kinematics_reference_frame` | 当前为 `base_link`，必须与 YAML `root_frame` 一致 |
 | `KinematicsModel*` | 当前选择的 FK 实现（默认 DH），碰撞检查时查询连杆位姿 |
+
+初始化时 `FclCollisionChecker` 把配置转交 `FclCollisionModelBuilder`；Builder 解析 YAML、
+校验关节顺序并预先构建机器人 FCL 几何资源。环境障碍物不在此阶段创建，而是在每次
+碰撞查询或每条路径查询开始时按需构建。
 
 规划默认组合为 `kinematics_backend:=dh`、`collision_backend:=fcl`。碰撞几何完全由
 YAML 提供，DH 运动学提供连杆位姿；碰撞后端不再需要或解析 URDF。URDF 仍用于
@@ -258,23 +277,23 @@ sequenceDiagram
     participant Caller as Planner / Caller
     participant C as FclCollisionChecker
     participant K as KinematicsModel
-    participant A as FclCollisionModel
+    participant A as FclCollisionModelBuilder
     participant F as FCL
 
-    Caller->>C: CheckState(q, scene)
+    Caller->>C: CheckCollision(q, obstacles, options)
+    C->>A: ComputeLinkCollisionObjects(q)
     loop 每个有碰撞几何体的 link
-        C->>K: GetLinkPose(q, link_name)
-        K-->>C: Pose3
+        A->>K: GetLinkPose(q, link_name)
+        K-->>A: Pose3
     end
-    C->>A: link poses + scene + allowed pairs
-    A->>A: 构造机器人及障碍物 CollisionObject
-    A->>F: 自碰撞 / 环境碰撞查询
-    F-->>A: 碰撞结果
-    A-->>C: CollisionCheckResult
+    A-->>C: LinkCollisionInfo 列表
+    C->>C: 构造环境 CollisionObject / Octree
+    C->>F: 自碰撞 / 环境碰撞 / 距离查询
+    F-->>C: 查询结果
     C-->>Caller: valid / collision / link / object
 ```
 
-当前为每次查询根据 FK 位姿构造 FCL `CollisionObject`，避免在多个并发查询之间共享带可变位姿的对象。机器人静态几何资源在初始化时构建；障碍物几何和对象在查询时根据传入场景生成。
+当前为每次查询根据 FK 位姿构造 FCL `CollisionObject`，避免在多个并发查询之间共享带可变位姿的对象。机器人静态几何资源在初始化时构建；障碍物几何、环境对象以及所有碰撞/距离查询都在 `FclCollisionChecker` 中完成。
 
 ## 5. 对外接口设计
 
@@ -283,27 +302,42 @@ sequenceDiagram
 - `valid` 表示本次检查是否成功执行；
 - `collision` 表示是否发现碰撞；
 - `message` 给出成功或失败原因；
-- `first_link` 与 `second_object` 描述碰撞对象；
+- `first_link` 与 `second_object` 描述首次碰撞：环境碰撞时 `second_object` 是障碍物
+  的整数 ID 字符串，自碰撞时是第二个连杆名；
+- `colliding_links` 在所有碰撞收集模式下保存全部发生碰撞的机器人连杆（去重）；
 - `collision_positions` 记录发生碰撞时的关节位置；
 - `checked_states` 记录路径检测实际检查的状态数量。
 
+`CollisionDistanceResult::obstacle_id` 同样使用障碍物整数 ID 的字符串形式。
+
 调用方必须区分“检查成功且无碰撞”和“检查本身失败”。`valid == false` 时不能把结果当作无碰撞。
+
+`CollisionQueryOptions` 控制本次查询的障碍物解释方式：
+
+| 字段 | 含义 |
+| --- | --- |
+| `obstacle_type` | `kGeometry`（默认）使用 `length/width/height/center` 组成的 AABB；`kPointCloud` 使用 `cloud_points` |
+| `point_cloud_resolution` | 点云体素边长（米），仅 `kPointCloud` 使用，默认 0.05 |
+| `collect_all_collisions` | 为 true 时继续扫描并填充 `colliding_links`；规划默认 false，首次碰撞即返回 |
 
 ### 5.1 单状态接口
 
 | 接口 | 作用 |
 | --- | --- |
-| `CheckState(q, scene)` | 检查机器人自碰撞和环境碰撞 |
-| `CheckSelfCollision(q)` | 只检查机器人自身连杆之间的碰撞 |
-| `CheckEnvironmentCollision(q, scene)` | 只检查机器人与场景障碍物的碰撞 |
+| `CheckCollision(q, obstacles, options)` | 检查机器人自碰撞和环境碰撞 |
+| `CheckSelfCollision(q)` | 只检查机器人自身连杆之间的碰撞（不含障碍物） |
+| `CheckEnvironmentCollision(q, obstacles, options)` | 只检查机器人与障碍物列表的碰撞（不含自碰撞） |
+
+`SetAllowedCollision(link_a, link_b, allowed)` 用于按无序连杆对增删允许碰撞规则；
+规划服务从 `allowed_collision_pairs` 参数读取 `"link_a:link_b"` 字符串并调用该接口。
 
 ### 5.2 路径与轨迹接口
 
 | 接口 | 作用 |
 | --- | --- |
-| `CheckPath(path, scene, max_joint_step)` | 对关节路径分段采样，检查每个采样状态的自碰撞和环境碰撞 |
-| `CheckPathCollisionWithObstacle(path, scene, obstacle_id, max_joint_step)` | 仅检查路径与指定障碍物之间的碰撞 |
-| `CheckTrajectory(trajectory, scene, max_joint_step)` | 先校验轨迹结构，再按关节位置构造路径进行离散碰撞检查 |
+| `CheckPathCollision(path, obstacles, max_joint_step, options)` | 对关节路径分段采样，检查每个采样状态的自碰撞和环境碰撞 |
+| `CheckPathCollision(path, obstacle, max_joint_step, options)` | 仅检查路径与单个障碍物之间的碰撞 |
+| `CheckTrajectory(trajectory, obstacles, max_joint_step, options)` | 先校验轨迹结构，再按关节位置构造路径进行离散碰撞检查 |
 
 路径的相邻路点按关节空间线性插值。对一段路径，当前采样数根据该段最大的关节变化量决定：
 
@@ -317,7 +351,9 @@ N = max(1, ceil(max_i(abs(q_end[i] - q_start[i])) / max_joint_step))
 
 ### 5.3 距离查询接口
 
-`ComputeDistanceToObstacle(q, scene, obstacle_id)` 返回给定关节状态下，机器人全部碰撞几何体到指定障碍物的最小距离，并记录对应的机器人连杆名称。
+`ComputeDistance(q, obstacle, options)` 返回给定关节状态下，机器人全部碰撞几何体到
+单个障碍物的最小距离，并记录对应的机器人连杆名称和障碍物整数 ID。
+`options.obstacle_type` 可分别选择几何 AABB（`kGeometry`）或点云 Octree（`kPointCloud`）。
 
 该接口面向单个障碍物。当前结果不提供距离梯度、最近点对的完整几何信息或连续轨迹安全证明。若需要用距离场做优化，应在后续接口中明确增加最近点、梯度和有效性语义。
 
@@ -329,14 +365,16 @@ N = max(1, ceil(max_i(abs(q_end[i] - q_start[i])) / max_joint_step))
 
 1. 同一连杆上的多个碰撞几何体之间的配对；
 2. 直接父子连杆配对；
-3. 用户通过 `allowed_collision_pairs` 显式配置的连杆配对。
+3. 调用方通过 `SetAllowedCollision()` 显式配置的连杆配对（规划服务从
+   `allowed_collision_pairs` 参数解析）。
 
 父子关系来自 YAML 的 `parent_link_name`（可选）。允许碰撞对按无序连杆对处理，因此
 `A:B` 与 `B:A` 等价。
 
 允许碰撞对只应排除结构上明确不需要检测的组合。不要为了让规划通过而随意增加过滤项，否则可能把真实的自碰撞隐藏掉。
 
-当前规划服务的默认过滤项包括：
+当前规划服务和可视化测试节点默认**不额外配置允许碰撞对**，只依赖上述同一连杆和直接
+父子连杆规则。原来的粗盒子模型曾默认放行：
 
 ```yaml
 allowed_collision_pairs:
@@ -347,13 +385,27 @@ allowed_collision_pairs:
   - "swing_link:bucket_link"
 ```
 
-这些默认项也应结合具体模型几何和实际运动范围复核。
+切换到真实 Mesh/修正后的 Box 几何后，这些过滤项已从默认配置中移除。全工作空间采样表明
+`base_link:bucket_link` 会在折叠姿态下真实发生（铲斗碰到履带底盘），继续放行会隐藏
+真实自碰撞。需要结构性例外时仍可通过 `allowed_collision_pairs` 参数显式添加，例如：
+
+```yaml
+allowed_collision_pairs:
+  - "link_a:link_b"
+```
 
 ### 6.2 环境碰撞
 
-环境碰撞对为每个机器人碰撞对象和每个启用的环境对象进行查询。禁用对象（`enabled: false`）不参与检测。
+环境碰撞对为每个机器人碰撞对象和每个启用的环境对象进行查询。禁用对象（`enabled: false`）
+在消息转换阶段被跳过，不参与检测。
 
-场景对象 ID 必须非空且唯一。几何参数、位姿或 frame 不合法时，检查返回失败，不会静默忽略不受支持的障碍物。
+`data::Object.id` 必须非负且在单次查询内唯一（`BuildEnvironment` 会拒绝重复 ID）。
+消息字符串 ID 由 `ObstacleAdapter::ObjectId()` 映射：纯数字 ID 原样保留，其他 ID 使用
+FNV-1a 哈希并清除符号位。几何参数、中心点或位姿不合法，以及空点云或非法分辨率，
+都会让检查返回失败，不会静默忽略不受支持的障碍物。
+
+同一个查询只能选择一种表示（`kGeometry` 或 `kPointCloud`）。可视化测试节点会分别对
+几何障碍物和点云障碍物执行查询，再合并碰撞结果。
 
 ## 7. 当前支持的模型与场景输入
 
@@ -381,6 +433,7 @@ allowed_collision_pairs:
 string id
 geometry_msgs/Pose pose
 shape_msgs/SolidPrimitive primitive
+sensor_msgs/PointCloud2 point_cloud
 bool enabled
 
 # PlanningScene.msg
@@ -389,15 +442,35 @@ bool is_diff
 CollisionObject[] objects
 ```
 
-当前环境几何支持：
+`ObstacleAdapter::Convert()` 负责把消息转换为碰撞后端使用的 `data::Object`：
 
-| SolidPrimitive 类型 | dimensions 含义 |
+| 消息字段 | 转换结果 |
 | --- | --- |
-| BOX | `[x, y, z]` |
-| SPHERE | `[radius]` |
-| CYLINDER | `[height, radius]` |
+| `pose.position` | `Object.center` |
+| `primitive`（BOX） | `length/width/height = dimensions[0..2]` |
+| `primitive`（SPHERE） | `length/width/height = 2 * radius` |
+| `primitive`（CYLINDER） | `length/width = 2 * radius`，`height = dimensions[HEIGHT]` |
+| `point_cloud` | `Object.cloud_points`（读取 float32 x/y/z，跳过非有限点） |
+| `id` | 数字 ID 保留为整数；其他字符串用 FNV-1a 映射到非负整数 |
+| `enabled=false` | 列表转换时跳过 |
 
-当前消息并未包含原始点云、OctoMap、体素占据数据、障碍物速度或预测轨迹。因此，当前 FCL 适配层**不能直接检测原始点云或动态障碍物**。
+几何障碍物的转换规则：
+
+- `pose.orientation` 不保留为朝向，而是用于把旋转后的几何体**保守展开为轴对齐包围盒**
+  （AABB）；`FclCollisionChecker` 使用该 AABB 构造 `fcl::Boxd`。
+- 球体不需要展开；圆柱体按半径和高度展开。
+- 空 `primitive.dimensions` 且没有点云时，几何查询会因尺寸非法而失败；
+  只有点云的对象必须使用 `ObstacleType::kPointCloud` 查询。
+
+点云规则：
+
+- `point_cloud` 只有原始点，没有 Free/Unknown 语义；体素化时只把有点的体素标记为
+  Occupied，不推断 Free 空间。
+- 点云坐标按消息数值读取，`Object.center` 作为平移施加到点云对象；当前实现**不使用
+  `pose.orientation` 旋转点云**。
+- `point_cloud_resolution` 必须为有限正数；空点云或没有有效点会返回失败。
+- 点云体素化为 `octomap::OcTree`，再包装为 `fcl::OcTreed` 参与碰撞/距离查询；路径查询
+  只构建一次点云环境，避免逐采样点重复体素化。
 
 ### 7.3 场景同步约定
 
@@ -405,46 +478,60 @@ CollisionObject[] objects
 
 规划请求携带非空对象或非空 frame 时，使用请求中的场景；请求未携带场景内容时，规划服务尝试使用最近保存的完整场景快照。
 
+规划服务在每次请求开始时调用一次 `ObstacleAdapter::Convert(scene.objects, ...)`，
+转换后的 `ObstacleList` 复用于起点、目标、规划搜索、路径后处理和最终轨迹检查。
+当前规划调用未显式传入 `CollisionQueryOptions`，因此使用默认的 `kGeometry`：
+`PlanningScene` 中的几何体障碍物会参与规划；仅有 `point_cloud` 的对象不会自动
+转换为几何体，需要调用方显式选择 `kPointCloud`（目前由可视化测试节点使用）。
+
 场景的障碍物 pose 必须已在碰撞模型 `root_frame`（当前为 `base_link`）下表达。当前没有
 自动 TF 变换步骤，感知或场景适配层需要先完成坐标变换。
 
-## 8. 点云、OctoMap 与动态障碍物的后续接入
+## 8. 点云、OctoMap 与动态障碍物
 
-第一版没有把感知数据类型直接写进 `CollisionChecker` 的公共接口。后续应先形成项目自己的环境模型，再由不同后端将其转换为具体算法所需的数据结构。
-
-建议的扩展链路：
+数据链路：
 
 ```mermaid
 flowchart LR
-    Perception[感知输出] --> Adapter[Environment Model Adapter]
-    Adapter --> Scene[项目自有 Environment Model]
-    Scene --> Primitive[几何体 / 体素]
-    Scene --> Octree[OctoMap / OcTree]
-    Scene --> Mesh[三角网格]
-    Primitive --> Backend[Collision Backend]
-    Octree --> Backend
-    Mesh --> Backend
+    Msg[CollisionObject.point_cloud] --> Adapter[ObstacleAdapter]
+    Adapter --> Obj[data::Object.cloud_points]
+    Obj --> Octree[octomap::OcTree]
+    Octree --> FCL[本地 vendored FCL OcTreed]
+    FCL --> Query[碰撞 / 距离查询]
 ```
 
-建议按输入类型逐步增加：
+### 8.1 已实现
 
-- **几何障碍物**：继续使用 Box、Sphere、Cylinder；适用于已有位置和尺寸估计的障碍物。
-- **点云**：先进行坐标统一、去噪和体素化，再把占据体素转换为碰撞几何或构建空间索引。稀疏表面点本身不等价于完整实体体积。
-- **OctoMap**：由地图构建层提供带占据语义的 OctoMap，再由对应适配器构建碰撞查询对象。不能仅凭“没有点”就把空间标记为 Free；Free、Occupied、Unknown 需要由感知/地图构建过程提供可靠语义。
-- **三角网格环境**：增加环境 Mesh 输入与加载器，不能假定当前只支持 STL 的机器人模型加载器已经自动支持环境 Mesh。
-- **动态障碍物**：当前接口只接收单时刻场景，不处理速度和未来轨迹。后续需要定义障碍物预测时间戳、预测轨迹/占据区域以及轨迹时刻对应的场景查询规则。
+- `ObstacleAdapter` 读取 `sensor_msgs/PointCloud2` 的 float32 x/y/z 字段，写入
+  `data::Object.cloud_points`。
+- `CollisionQueryOptions::obstacle_type = kPointCloud` 时，`FclCollisionChecker` 按
+  `point_cloud_resolution` 将点云体素化为 `octomap::OcTree`，并包装为 `fcl::OcTreed`。
+- 支持点云环境碰撞、点云路径碰撞和点云距离查询；空点云、无有效点、非法分辨率均返回
+  失败。
+- 点云只标记 Occupied 体素，不推断 Free 空间。
+- 本地 vendored FCL 编译时启用了 OctoMap 后端，构建需要系统 `octomap`。
+- 可视化测试节点支持用 RViz `Publish Point` 逐点添加点云障碍物，并与几何障碍物
+  分别查询后合并结果。
 
-FCL 适配层可以继续扩展更多几何数据结构；但环境输入格式和占据语义应由项目自己的场景层定义，避免让感知模块直接依赖 FCL 类型。
+### 8.2 尚未实现
+
+- **Free/Unknown 语义**：没有传感器原点和射线信息，不能做 free-space carving；
+  “没有点”不等于 Free。
+- **直接 OctoMap 输入**：当前只转换成 `OcTree`，没有定义项目级 OctoMap/占据地图消息。
+- **环境三角网格**：当前仅有机器人 YAML Mesh，环境障碍物仍为几何体 AABB 或点云。
+- **动态障碍物**：接口只接收单时刻场景，不处理速度、预测轨迹或时间相关查询。
+- **连续碰撞检测**：路径接口仍是离散关节空间采样。
+- **Broadphase 场景管理**：当前逐对象执行 FCL 查询，尚未引入 Broadphase manager。
 
 ## 9. 规划流程中的调用位置
 
 当前规划服务在以下阶段使用碰撞检测：
 
-1. **起点验证**：对规划起始关节状态执行 `CheckState`。
-2. **目标验证**：对目标关节状态执行 `CheckState`。
-3. **规划搜索**：通过状态有效性回调执行单状态碰撞检查；线段有效性回调使用 `CheckPath`。
+1. **起点验证**：对规划起始关节状态执行 `CheckCollision`。
+2. **目标验证**：对目标关节状态执行 `CheckCollision`。
+3. **规划搜索**：通过状态有效性回调执行单状态碰撞检查；线段有效性回调使用 `CheckPathCollision`。
 4. **路径后处理**：简化和平滑过程使用线段有效性检查，避免后处理引入碰撞。
-5. **最终路径验证**：对处理后的完整路径执行 `CheckPath`。
+5. **最终路径验证**：对处理后的完整路径执行 `CheckPathCollision`。
 6. **时间参数化后验证**：对输出轨迹执行 `CheckTrajectory`。
 
 规划服务中的 `max_collision_joint_step` 当前默认值为 `0.03`，控制路径和轨迹碰撞检查的采样密度。它不是连续碰撞检测的精度保证。
@@ -500,15 +587,18 @@ collision_backend: custom_collision
 
 | 测试文件 | 覆盖内容 |
 | --- | --- |
-| `collision_checker_test.cpp` | 环境碰撞、自碰撞、允许碰撞对、STL 加载、路径中间采样、DH 运动学 + 挖机 YAML、frame 校验、距离查询 |
-| `collision_checker_factory_test.cpp` | 默认后端注册、未知类型、运行时注册 |
-| `collision_benchmark_test.cpp` | 可选的完整挖机模型性能基准 |
+| `collision_checker_test.cpp` | 几何/点云环境碰撞、自碰撞、允许碰撞对、STL 加载、路径中间采样、点云路径、点云距离、空点云拒绝、ObstacleAdapter 转换、DH 运动学 + 挖机 YAML、frame 校验、距离查询（共 16 个用例） |
+| `collision_checker_factory_test.cpp` | 默认 `fcl` 后端注册、未知类型、运行时注册 |
+| `collision_benchmark_test.cpp` | 完整挖机模型的 `CheckCollision` 性能基准 |
+| 可视化测试（无 gtest） | `demo.launch.py` + `collision_visual_test_node`：Box 拖动、点云点选取、多连杆亮红、手动 IK、TF 转换 |
 
 建议后续继续补充：
 
+- `collect_all_collisions` 的多连杆结果测试，以及默认模式下首次碰撞即返回的契约测试；
 - 不支持的 YAML 几何类型、损坏网格、错误维度和非法四元数的失败测试；
 - 不完整规划关节组和 FK 缺失连杆的初始化/查询失败测试；
 - 多碰撞几何体、多个障碍物和重复 ID 测试；
+- 障碍物带旋转时 AABB 保守展开的边界测试；
 - 不同 FK 后端在相同关节状态下的碰撞结果一致性测试；
 - 更密采样与较稀采样对路径检测结果及耗时的影响测试；
 - 每个新后端必须复用同一套接口契约测试。
@@ -538,9 +628,23 @@ ros2 launch excavator_sim_viz demo.launch.py start_collision_test:=false
 1. 在 RViz 左侧 `Excavator Planning` 面板的 **Box obstacle** 区域设置 id、x/y/z、yaw 和尺寸，点击 `Add / update`；场景通过 `/excavator/scene` 发布。
 2. RViz 中出现红色半透明障碍物盒子（交互标记命名空间 `/excavator_obstacle`），按住并拖动即可任意移动障碍物；规划面板会在每帧拖动时发布完整场景快照。
 3. 拖动青色小球 `bucket_tip_drag`（交互标记命名空间 `/excavator_collision_test`）。节点对 `bucket_tip` 做位置优先 IK，通过 `/excavator/manual_joint_state` 让轨迹控制器进入手动跟随模式，挖机爪可在工作空间内任意移动。
-4. 碰撞检测节点以 20 Hz 检查当前 `/joint_states` 与 `/excavator/scene`：
-   - 发生自碰撞或环境碰撞时，YAML 中所有机器人碰撞几何体与碰撞障碍物按**亮红色**显示；
-   - 碰撞连杆以更高不透明度突出，并在其上方显示 `COLLISION: ...` 文本；
+4. **点云障碍物**：选择 RViz 工具栏的 `Publish Point`，在场景中单击即可逐点添加点云障碍物。
+   - 点击点使用 RViz 当前 Fixed Frame（默认 `world`），节点通过 TF 转换到 `base_link`；
+   - 点显示为橙色小球；所有点累积为一个点云障碍物，按 `point_cloud_resolution`
+     （默认 0.05 m）体素化为 OctoMap 后参与碰撞检测；
+   - 与挖机碰撞时，点云和碰撞连杆变亮红；
+   - 清除所有点：
+     ```bash
+     ros2 topic pub --once /excavator/clear_point_cloud std_msgs/msg/Empty "{}"
+     ```
+   - 点云与 Box 可以同时存在：节点分别用 `kPointCloud` 和 `kGeometry` 查询后合并结果。
+5. 碰撞检测节点以 20 Hz 检查当前 `/joint_states` 与 `/excavator/scene`：
+   - 发生环境碰撞时，高亮**所有与障碍物接触的连杆**的碰撞几何体与碰撞障碍物，按**亮红色**显示；
+   - 发生自碰撞时，高亮发生碰撞的两个连杆的碰撞几何体；
+   - 点云障碍物继续添加时，新接触的连杆会追加高亮，不会覆盖已有碰撞连杆；
+   - 可视化节点设置 `CollisionQueryOptions::collect_all_collisions = true`，
+     由检查器填充 `CollisionCheckResult::colliding_links`；规划默认仍为首次碰撞即返回；
+   - 在碰撞连杆上方显示 `COLLISION: ...` 文本；
    - 碰撞解除后发布 `DELETEALL`，红色标记自动清除。
 
 相关话题：
@@ -551,6 +655,8 @@ ros2 launch excavator_sim_viz demo.launch.py start_collision_test:=false
 | `/excavator/collision_test_markers` | 碰撞测试节点 → RViz | 亮红碰撞几何与文本标记（与规划服务的 `/excavator/collision_result` 分开） |
 | `/excavator/manual_joint_state` | 碰撞测试节点 → 轨迹控制器 | 手动拖动 IK 关节目标 |
 | `/excavator/manual_target_pose` | 外部 → 碰撞测试节点 | 可选，`PoseStamped` 自动化/脚本驱动 |
+| `/clicked_point` | RViz Publish Point → 碰撞测试节点 | 逐点添加点云障碍物（自动转换到 `base_link`） |
+| `/excavator/clear_point_cloud` | 外部 → 碰撞测试节点 | `std_msgs/Empty`，清除已添加的点云点 |
 
 手动拖动会取消正在执行的轨迹。`manual_control_enabled`（轨迹控制器参数）可关闭该行为。碰撞测试节点同样适用于无界面验证：向 `/excavator/manual_target_pose` 发布 `base_link` 下的目标位姿，并观察 `/excavator/manual_joint_state` 与 `/excavator/collision_test_markers`。
 
@@ -562,42 +668,46 @@ ros2 launch excavator_sim_viz demo.launch.py start_collision_test:=false
 | Box / Sphere / Cylinder / Capsule / STL Mesh 机器人几何 | 已实现 |
 | 本地移植 FCL 0.7.0（无系统 libfcl 依赖） | 已实现 |
 | URDF FK / Modified-DH FK 注入 | 已接入统一 FK 接口，规划默认 DH |
-| 自碰撞与允许碰撞对过滤 | 已实现 |
-| Box / Sphere / Cylinder 环境障碍物 | 已实现 |
+| 自碰撞与允许碰撞对过滤 | 已实现（`SetAllowedCollision`） |
+| Box / Sphere / Cylinder 环境障碍物 | 已实现（统一转换为保守 AABB） |
+| 点云环境障碍物（PointCloud2 → OctoMap） | 已实现（`kPointCloud` + `point_cloud_resolution`） |
 | 单状态、离散路径和轨迹碰撞查询 | 已实现 |
 | 指定障碍物路径查询 | 已实现 |
-| 指定障碍物距离查询 | 已实现 |
-| RViz 可拖动障碍物 + 挖机爪手动 IK | 已实现（`collision_visual_test_node`） |
-| 实时碰撞亮红可视化 | 已实现 |
-| OctoMap / OcTree | 未实现 |
-| 原始点云和体素地图输入 | 未实现 |
+| 指定障碍物距离查询（几何/点云） | 已实现 |
+| 全部碰撞连杆收集 | 已实现（`collect_all_collisions`） |
+| RViz Box 拖动 + 点云点选取 + 挖机爪手动 IK | 已实现（`collision_visual_test_node`） |
+| 实时多连杆碰撞亮红可视化 | 已实现 |
 | 环境三角网格 | 未实现 |
+| 直接 OctoMap / 占据地图消息输入 | 未实现（当前仅 PointCloud2） |
+| Free/Unknown 占据语义与射线 carving | 未实现 |
 | 动态障碍物预测 | 未实现 |
 | 连续碰撞检测 / 连续时间验证 | 未实现 |
 | Broadphase 场景管理优化 | 尚未实现 |
 
 推荐的下一步顺序：
 
-1. 先在 ROS 2 Humble 环境中完成当前 FCL 版本的编译和单元测试，确认模型坐标系、碰撞过滤和路径采样行为。
-2. 根据感知实际输出，定义项目自有的环境障碍物/占据地图数据模型。
-3. 增加点云体素化或 OctoMap 适配，不把感知消息直接耦合到 FCL。
+1. 增加 `collect_all_collisions` 的单元测试和多障碍物/多连杆可视化回归。
+2. 根据感知实际输出，定义项目自有的环境障碍物/占据地图消息，支持直接传入 OctoMap。
+3. 增加 Free/Unknown 语义和传感器原点，支持可靠的 free-space carving。
 4. 为动态障碍物增加时间相关场景接口。
-5. 再根据性能测试决定是否引入 Broadphase manager、缓存或更高效的距离查询结构。
+5. 根据性能测试决定是否引入 Broadphase manager、缓存或更高效的距离查询结构。
 6. 自研算法完成后，作为新的 `CollisionChecker` 后端接入，使用统一测试集完成替换。
 
 ## 13. 相关代码入口
 
 - 碰撞检测接口：`src/excavator_collision/include/excavator_collision/collision_checker_interface.hpp`
-- 当前 FCL 检查器：`src/excavator_collision/include/excavator_collision/collision_checker.hpp`
+- 当前 FCL 检查器：`src/excavator_collision/include/excavator_collision/fcl_collision_checker.hpp`
 - 工厂：`src/excavator_collision/include/excavator_collision/collision_checker_factory.hpp`
-- 机器人碰撞模型：`src/excavator_collision/include/excavator_collision/robot_collision_model.hpp`
-- 碰撞检查协调层：`src/excavator_collision/collision_detection/src/collision_checker.cpp`
-- YAML 碰撞模型解析：`src/excavator_collision/collision_detection/src/robot_collision_model.cpp`
+- 机器人碰撞模型：`src/excavator_collision/include/excavator_collision/robot_collision_geometry_model.hpp`
+- 碰撞检查协调层：`src/excavator_collision/src/fcl_collision_checker.cpp`
+- 障碍物消息适配：`src/excavator_collision/include/excavator_collision/obstacle_adapter.hpp`、`src/excavator_collision/src/obstacle_adapter.cpp`
+- 项目障碍物数据模型：`src/excavator_common/data/object/object.h`
+- YAML 碰撞模型解析：`src/excavator_collision/src/robot_collision_geometry_model.cpp`
 - 默认挖机碰撞 YAML：`src/excavator_description/config/excavator_collision.yaml`
-- FCL 适配实现：`src/excavator_collision/collision_detection/third_library/fcl_collision_model.*`
-- 本地 FCL 源码与 CMake：`src/excavator_collision/collision_detection/third_library/fcl/`
+- FCL 适配实现：`src/excavator_collision/src/fcl_collision_model_builder.*`
+- 本地 FCL 源码与 CMake：`src/excavator_collision/third_library/fcl/`
 - 规划服务接入：`src/excavator_planning/src/planning_server.cpp`
-- 交互碰撞测试节点：`src/excavator_visualization/src/collision_visual_test_node.cpp`
+- 交互碰撞测试节点（Box/点云/多连杆高亮/手动 IK）：`src/excavator_visualization/src/collision_visual_test_node.cpp`
 - 手动拖动接入：`src/excavator_sim_viz/src/trajectory_controller_node.cpp`
-- 当前环境消息：`src/excavator_interfaces/msg/CollisionObject.msg`、`PlanningScene.msg`
-- 模块实现说明：`src/excavator_collision/collision_detection/README.md`
+- 当前环境消息：`src/excavator_interfaces/msg/CollisionObject.msg`（含 `point_cloud`）、`PlanningScene.msg`
+- 模块实现说明：`src/excavator_collision/README.md`

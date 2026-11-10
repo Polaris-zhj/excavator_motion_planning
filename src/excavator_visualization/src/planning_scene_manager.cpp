@@ -6,7 +6,7 @@
 
 #include "shape_msgs/msg/solid_primitive.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -145,4 +145,4 @@ PlanningSceneManager::Snapshot() const {
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

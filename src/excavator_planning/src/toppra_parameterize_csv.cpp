@@ -23,11 +23,11 @@
 
 namespace {
 
-using tramcar::planning::JointPath;
-using tramcar::planning::JointPositions;
-using tramcar::planning::TimeParameterizationRequest;
-using tramcar::planning::TimeParameterizationResponse;
-using tramcar::planning::ToppraTimeParameterizer;
+using excavator::planning::JointPath;
+using excavator::planning::JointPositions;
+using excavator::planning::TimeParameterizationRequest;
+using excavator::planning::TimeParameterizationResponse;
+using excavator::planning::ToppraTimeParameterizer;
 
 std::string Trim(const std::string& value) {
   const std::string whitespace = " \t\r\n";

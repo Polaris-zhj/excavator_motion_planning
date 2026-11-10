@@ -18,7 +18,7 @@ namespace excavator_visualization {
 namespace {
 
 trajectory_msgs::msg::JointTrajectory ToRosTrajectory(
-    const tramcar::planning::JointTrajectory& trajectory) {
+    const excavator::planning::JointTrajectory& trajectory) {
   trajectory_msgs::msg::JointTrajectory message;
   message.joint_names = trajectory.joint_names;
   message.points.reserve(trajectory.points.size());
@@ -83,7 +83,7 @@ class TrajectoryReplayNode final : public rclcpp::Node {
       throw std::runtime_error("failed to load replay trajectory: " + error);
     }
     const auto validation =
-        tramcar::planning::ValidateJointTrajectory(trajectory_);
+        excavator::planning::ValidateJointTrajectory(trajectory_);
     if (!validation.ok) {
       throw std::runtime_error("replay trajectory is invalid: " +
                                validation.message);
@@ -163,7 +163,7 @@ class TrajectoryReplayNode final : public rclcpp::Node {
         first.accelerations.size() == joint_count &&
         second.accelerations.size() == joint_count;
 
-    tramcar::planning::JointTrajectoryPoint sample;
+    excavator::planning::JointTrajectoryPoint sample;
     sample.t = elapsed_;
     sample.positions.resize(joint_count);
     sample.velocities.resize(joint_count);
@@ -208,14 +208,14 @@ class TrajectoryReplayNode final : public rclcpp::Node {
     status_publisher_->publish(message);
   }
 
-  void PublishState(const tramcar::planning::JointTrajectoryPoint& point,
+  void PublishState(const excavator::planning::JointTrajectoryPoint& point,
                     bool finished) {
     sensor_msgs::msg::JointState state;
     state.header.stamp = now();
     state.name = trajectory_.joint_names;
     state.position = point.positions;
     state.velocity = finished
-                         ? tramcar::planning::JointPositions(
+                         ? excavator::planning::JointPositions(
                                trajectory_.joint_names.size(), 0.0)
                          : point.velocities;
     for (std::size_t index = 0; index < passive_joint_names_.size();
@@ -230,8 +230,8 @@ class TrajectoryReplayNode final : public rclcpp::Node {
     joint_state_publisher_->publish(state);
   }
 
-  tramcar::planning::visualization::ReplayManager replay_manager_;
-  tramcar::planning::JointTrajectory trajectory_;
+  excavator::planning::visualization::ReplayManager replay_manager_;
+  excavator::planning::JointTrajectory trajectory_;
   double replay_rate_{1.0};
   double elapsed_{0.0};
   std::vector<std::string> passive_joint_names_;

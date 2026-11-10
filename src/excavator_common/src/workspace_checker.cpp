@@ -5,7 +5,7 @@
 #include <limits>
 #include <utility>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -118,4 +118,4 @@ WorkspaceCheckResult WorkspaceChecker::Check(const Pose3& pose) const {
 const WorkspaceConfig& WorkspaceChecker::config() const { return config_; }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

@@ -6,7 +6,7 @@
 #include "excavator_common/joint_trajectory.hpp"
 #include "excavator_common/robot_state.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Control output produced by a ControllerInterface implementation. Velocities
@@ -40,6 +40,6 @@ class ControllerInterface {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_SIM_VIZ__CONTROLLER_INTERFACE_HPP_

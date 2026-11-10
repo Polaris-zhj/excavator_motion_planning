@@ -19,11 +19,11 @@
 namespace excavator_visualization {
 namespace {
 
-using tramcar::planning::JointPositions;
-using tramcar::planning::JointTrajectory;
-using tramcar::planning::JointTrajectoryPoint;
-using tramcar::planning::Pose3;
-using tramcar::planning::ValidationResult;
+using excavator::planning::JointPositions;
+using excavator::planning::JointTrajectory;
+using excavator::planning::JointTrajectoryPoint;
+using excavator::planning::Pose3;
+using excavator::planning::ValidationResult;
 
 double ToSeconds(const builtin_interfaces::msg::Duration& duration) {
   return static_cast<double>(duration.sec) +
@@ -32,7 +32,7 @@ double ToSeconds(const builtin_interfaces::msg::Duration& duration) {
 
 bool BuildOccupancyVisuals(
     const std::string& urdf_xml, const std::vector<std::string>& link_names,
-    std::vector<tramcar::planning::visualization::LinkVisual>* visuals,
+    std::vector<excavator::planning::visualization::LinkVisual>* visuals,
     rclcpp::Logger logger) {
   urdf::Model model;
   if (!model.initString(urdf_xml)) {
@@ -56,7 +56,7 @@ bool BuildOccupancyVisuals(
                   link_name.c_str());
       continue;
     }
-    tramcar::planning::visualization::LinkVisual link_visual;
+    excavator::planning::visualization::LinkVisual link_visual;
     if (visual->geometry->type == urdf::Geometry::MESH) {
       const auto mesh =
           std::dynamic_pointer_cast<urdf::Mesh>(visual->geometry);
@@ -66,7 +66,7 @@ bool BuildOccupancyVisuals(
         continue;
       }
       link_visual.type =
-          tramcar::planning::visualization::LinkVisualType::kMesh;
+          excavator::planning::visualization::LinkVisualType::kMesh;
       link_visual.mesh_resource = mesh->filename;
       link_visual.scale.x = mesh->scale.x;
       link_visual.scale.y = mesh->scale.y;
@@ -81,7 +81,7 @@ bool BuildOccupancyVisuals(
         continue;
       }
       link_visual.type =
-          tramcar::planning::visualization::LinkVisualType::kBox;
+          excavator::planning::visualization::LinkVisualType::kBox;
       link_visual.scale.x = box->dim.x;
       link_visual.scale.y = box->dim.y;
       link_visual.scale.z = box->dim.z;
@@ -165,15 +165,15 @@ class TrajectoryVisualizerNode final : public rclcpp::Node {
     }
 
     visualizer_ = std::make_unique<
-        tramcar::planning::visualization::TrajectoryVisualizer>(
+        excavator::planning::visualization::TrajectoryVisualizer>(
         kinematics_, frame_id_, tip_link_);
     if (occupancy_enabled_ && kinematics_ready_ && !robot_description.empty()) {
-      std::vector<tramcar::planning::visualization::LinkVisual>
+      std::vector<excavator::planning::visualization::LinkVisual>
           occupancy_visuals;
       if (BuildOccupancyVisuals(robot_description, occupancy_links,
                                 &occupancy_visuals, get_logger())) {
         occupancy_visualizer_ = std::make_unique<
-            tramcar::planning::visualization::TrajectoryOccupancyVisualizer>(
+            excavator::planning::visualization::TrajectoryOccupancyVisualizer>(
             kinematics_, std::move(occupancy_visuals), frame_id_,
             static_cast<std::size_t>(std::max(1, occupancy_samples)));
       } else {
@@ -321,11 +321,11 @@ class TrajectoryVisualizerNode final : public rclcpp::Node {
   }
 
   std::vector<std::string> joint_names_;
-  tramcar::planning::UrdfKinematicsModel kinematics_;
-  std::unique_ptr<tramcar::planning::visualization::TrajectoryVisualizer>
+  excavator::planning::UrdfKinematicsModel kinematics_;
+  std::unique_ptr<excavator::planning::visualization::TrajectoryVisualizer>
       visualizer_;
   std::unique_ptr<
-      tramcar::planning::visualization::TrajectoryOccupancyVisualizer>
+      excavator::planning::visualization::TrajectoryOccupancyVisualizer>
       occupancy_visualizer_;
   std::string frame_id_;
   std::string tip_link_;

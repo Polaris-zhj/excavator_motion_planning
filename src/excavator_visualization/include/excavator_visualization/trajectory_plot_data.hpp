@@ -9,7 +9,7 @@
 #include "excavator_common/joint_trajectory.hpp"
 #include "excavator_common/robot_state.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 
@@ -65,6 +65,6 @@ class TrajectoryPlotData {
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_VISUALIZATION__TRAJECTORY_PLOT_DATA_HPP_

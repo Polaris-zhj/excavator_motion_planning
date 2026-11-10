@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 

@@ -183,7 +183,7 @@ ros2 launch excavator_planning planning_server.launch.py \
 
 ### 规划器插件与 RRT*
 
-规划器基类 `tramcar::planning::PlannerPlugin` 位于 `excavator_planning`，规划服务通过 pluginlib 动态加载，可用 `planner_class` 参数切换：
+规划器基类 `excavator::planning::PlannerPlugin` 位于 `excavator_planning`，规划服务通过 pluginlib 动态加载，可用 `planner_class` 参数切换：
 
 - `excavator_planning/LinearPlannerPlugin`：默认直线基线（有限绕行候选）；
 - `excavator_planner_rrtstar/RrtStarPlanner`：独立包中的 RRT* 算法。
@@ -288,7 +288,7 @@ collision_backend: urdf_fcl
 
 - 当前工厂已注册的碰撞后端只有 `urdf_fcl`；
 - URDF 或 Modified-DH 运动学均通过 `KinematicsModel` 注入碰撞检查器；
-- 机器人碰撞几何仍从 URDF 加载，`RobotCollisionModel` 与 `KinematicsModel` 相互独立；
+- 机器人碰撞几何仍从 URDF 加载，`RobotCollisionGeometryModel` 与 `KinematicsModel` 相互独立；
 - FCL 专属类型和计算逻辑集中在 `collision_detection/third_library/fcl`；
 - 当前支持单状态、路径、轨迹、自碰撞、环境碰撞和指定障碍物距离查询；路径检测采用离散采样，不保证连续碰撞自由。
 
@@ -693,13 +693,13 @@ xacro src/excavator_description/urdf/excavator.urdf.xacro > /tmp/excavator.urdf
 ```cpp
 #include "kinematics/urdf_kinematics_model.hpp"
 
-tramcar::planning::UrdfKinematicsModel kinematics;
+excavator::planning::UrdfKinematicsModel kinematics;
 const auto load = kinematics.InitializeFromFile("/tmp/excavator.urdf");
 if (!load.ok) {
   // 根据 load.message 处理错误。
 }
 
-tramcar::planning::Pose3 pose;
+excavator::planning::Pose3 pose;
 const auto fk = kinematics.GetLinkPose(
     {0.0, -0.35, 0.45, -0.4}, "bucket_tip", &pose);
 ```

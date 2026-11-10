@@ -12,7 +12,7 @@
 #include "excavator_common/planner_interfaces.hpp"
 #include "excavator_planning/planner_plugin.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Lightweight in-process registry used by unit tests. Runtime planner
@@ -36,6 +36,6 @@ class PlannerFactory {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_PLANNING__PLANNER_FACTORY_HPP_

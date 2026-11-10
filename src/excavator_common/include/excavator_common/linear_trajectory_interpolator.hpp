@@ -3,7 +3,7 @@
 
 #include "excavator_common/planner_interfaces.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Piecewise-linear interpolation with linear velocity/acceleration blending.
@@ -16,6 +16,6 @@ class LinearTrajectoryInterpolator final : public TrajectoryInterpolator {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COMMON__LINEAR_TRAJECTORY_INTERPOLATOR_HPP_

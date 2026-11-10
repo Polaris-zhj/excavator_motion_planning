@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -83,4 +83,4 @@ TEST(ReplayManagerTest, RejectsMalformedFiles) {
 }  // namespace
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

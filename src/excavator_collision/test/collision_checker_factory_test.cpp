@@ -6,10 +6,10 @@
 #include <memory>
 #include <string>
 
-#include "excavator_collision/collision_checker.hpp"
+#include "excavator_collision/fcl_collision_checker.hpp"
 #include "excavator_collision/collision_checker_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -19,11 +19,11 @@ class MockCollisionChecker final : public CollisionChecker {
                                const KinematicsModel*) override {
     return {true, ""};
   }
-  void SetAllowedCollisionPairs(
-      const std::vector<std::pair<std::string, std::string>>&) override {}
-  CollisionCheckResult CheckState(
-      const JointPositions&,
-      const excavator_interfaces::msg::PlanningScene&) const override {
+  void SetAllowedCollision(const std::string&, const std::string&,
+                           bool) override {}
+  CollisionCheckResult CheckCollision(
+      const JointPositions&, const ObstacleList&,
+      const CollisionQueryOptions&) const override {
     CollisionCheckResult result;
     result.valid = true;
     return result;
@@ -35,40 +35,36 @@ class MockCollisionChecker final : public CollisionChecker {
     return result;
   }
   CollisionCheckResult CheckEnvironmentCollision(
-      const JointPositions&,
-      const excavator_interfaces::msg::PlanningScene&) const override {
+      const JointPositions&, const ObstacleList&,
+      const CollisionQueryOptions&) const override {
     CollisionCheckResult result;
     result.valid = true;
     return result;
   }
-  CollisionCheckResult CheckPath(
-      const JointPath&,
-      const excavator_interfaces::msg::PlanningScene&,
-      double) const override {
+  CollisionCheckResult CheckPathCollision(
+      const JointPath&, const ObstacleList&, double,
+      const CollisionQueryOptions&) const override {
     CollisionCheckResult result;
     result.valid = true;
     return result;
   }
-  CollisionCheckResult CheckPathCollisionWithObstacle(
-      const JointPath&,
-      const excavator_interfaces::msg::PlanningScene&,
-      const std::string&, double) const override {
+  CollisionCheckResult CheckPathCollision(
+      const JointPath&, const Obstacle&, double,
+      const CollisionQueryOptions&) const override {
     CollisionCheckResult result;
     result.valid = true;
     return result;
   }
   CollisionCheckResult CheckTrajectory(
-      const JointTrajectory&,
-      const excavator_interfaces::msg::PlanningScene&,
-      double) const override {
+      const JointTrajectory&, const ObstacleList&, double,
+      const CollisionQueryOptions&) const override {
     CollisionCheckResult result;
     result.valid = true;
     return result;
   }
-  CollisionDistanceResult ComputeDistanceToObstacle(
-      const JointPositions&,
-      const excavator_interfaces::msg::PlanningScene&,
-      const std::string&) const override {
+  CollisionDistanceResult ComputeDistance(
+      const JointPositions&, const Obstacle&,
+      const CollisionQueryOptions&) const override {
     CollisionDistanceResult result;
     result.valid = true;
     result.distance = 0.0;
@@ -100,4 +96,4 @@ TEST(CollisionCheckerFactoryTest, RuntimeRegistrationWorks) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

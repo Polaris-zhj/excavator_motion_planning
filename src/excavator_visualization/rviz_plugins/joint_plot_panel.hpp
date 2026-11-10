@@ -34,8 +34,8 @@ namespace excavator_visualization {
 struct PlotCurve {
   std::string name;
   QColor color;
-  tramcar::planning::visualization::PlotSeries reference;
-  tramcar::planning::visualization::PlotSeries actual;
+  excavator::planning::visualization::PlotSeries reference;
+  excavator::planning::visualization::PlotSeries actual;
 };
 
 // Small QPainter plot widget. QCustomPlot is deliberately not required.
@@ -114,14 +114,14 @@ class ExcavatorJointPlotPanel : public rviz_common::Panel {
       status_subscription_;
 
   std::mutex mutex_;
-  tramcar::planning::visualization::TrajectoryPlotData plot_data_;
+  excavator::planning::visualization::TrajectoryPlotData plot_data_;
   std::vector<std::string> joint_names_;
   bool execution_running_{false};
   bool has_execution_status_{false};
   bool reset_view_pending_{false};
   // Drops samples taken before the arm reaches the trajectory start, anchors
   // the start instant to t=0 and detects teleports between runs.
-  tramcar::planning::visualization::MeasuredCurveAligner aligner_;
+  excavator::planning::visualization::MeasuredCurveAligner aligner_;
   std::uint8_t last_execution_state_{0};
   bool offline_started_{false};
   double offline_start_stamp_{0.0};

@@ -4,7 +4,7 @@
 #include "excavator_planning/planner_plugin.hpp"
 #include "pluginlib/class_list_macros.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 class LinearPlannerPlugin final : public PlannerPlugin {
@@ -29,7 +29,7 @@ class LinearPlannerPlugin final : public PlannerPlugin {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
-PLUGINLIB_EXPORT_CLASS(tramcar::planning::LinearPlannerPlugin,
-                       tramcar::planning::PlannerPlugin)
+PLUGINLIB_EXPORT_CLASS(excavator::planning::LinearPlannerPlugin,
+                       excavator::planning::PlannerPlugin)

@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -102,4 +102,4 @@ TEST_F(UrdfKinematicsTest, ReportsIkTimeBudgetExceeded) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

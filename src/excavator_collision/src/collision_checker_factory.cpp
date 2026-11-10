@@ -5,9 +5,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "excavator_collision/collision_checker.hpp"
+#include "excavator_collision/fcl_collision_checker.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct CollisionCheckerFactory::Impl {
@@ -73,4 +73,4 @@ const FclRegistrar kFclRegistrar;
 }  // namespace
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

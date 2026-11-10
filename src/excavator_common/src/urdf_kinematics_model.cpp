@@ -11,7 +11,7 @@
 #include <Eigen/Geometry>
 #include <urdf/model.h>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -515,4 +515,4 @@ InverseKinematicsResult UrdfKinematicsModel::SolveIK(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

@@ -11,7 +11,7 @@
 #include "excavator_planning/time_parameterizer_factory.hpp"
 #include "excavator_planning/toppra_time_parameterizer.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -167,4 +167,4 @@ TEST(ToppraTimeParameterizerTest, RejectsDegenerateInput) {
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

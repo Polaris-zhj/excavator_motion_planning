@@ -6,7 +6,7 @@
 
 #include "excavator_common/linear_trajectory_interpolator.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -435,4 +435,4 @@ bool TrajectoryController::HasActiveTrajectory() const {
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

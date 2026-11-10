@@ -1,8 +1,12 @@
-#include "excavator_collision/collision_checker.hpp"
+#include "excavator_collision/fcl_collision_checker.hpp"
+#include "excavator_collision/obstacle_adapter.hpp"
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -11,10 +15,13 @@
 
 #include <Eigen/Geometry>
 
+#include "excavator_interfaces/msg/planning_scene.hpp"
 #include "kinematics/dh_kinematics_model.hpp"
+#include "sensor_msgs/msg/point_cloud2.hpp"
+#include "sensor_msgs/msg/point_field.hpp"
 #include "shape_msgs/msg/solid_primitive.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -157,6 +164,64 @@ excavator_interfaces::msg::CollisionObject MakeSphere(
   return object;
 }
 
+excavator_interfaces::msg::CollisionObject MakePointCloudObject(
+    const std::string& id, const std::vector<Eigen::Vector3d>& points) {
+  excavator_interfaces::msg::CollisionObject object;
+  object.id = id;
+  object.enabled = true;
+  object.pose.orientation.w = 1.0;
+
+  auto& cloud = object.point_cloud;
+  cloud.header.frame_id = "base_link";
+  cloud.height = 1;
+  cloud.width = static_cast<std::uint32_t>(points.size());
+  cloud.point_step = 12;
+  cloud.row_step = cloud.point_step * cloud.width;
+  cloud.is_bigendian = false;
+  cloud.is_dense = true;
+
+  cloud.fields.resize(3);
+  for (std::size_t index = 0; index < 3; ++index) {
+    cloud.fields[index].name =
+        index == 0 ? "x" : (index == 1 ? "y" : "z");
+    cloud.fields[index].offset = static_cast<std::uint32_t>(index * 4);
+    cloud.fields[index].datatype = sensor_msgs::msg::PointField::FLOAT32;
+    cloud.fields[index].count = 1;
+  }
+
+  cloud.data.resize(cloud.row_step);
+  for (std::size_t index = 0; index < points.size(); ++index) {
+    const std::array<float, 3> coordinates = {
+        static_cast<float>(points[index].x()),
+        static_cast<float>(points[index].y()),
+        static_cast<float>(points[index].z())};
+    std::memcpy(cloud.data.data() + index * cloud.point_step,
+                coordinates.data(), sizeof(coordinates));
+  }
+  return object;
+}
+
+std::string AdaptedId(const std::string& id) {
+  return std::to_string(ObstacleAdapter::ObjectId(id));
+}
+
+Obstacle ConvertObstacle(
+    const excavator_interfaces::msg::CollisionObject& source) {
+  Obstacle obstacle;
+  const ValidationResult result = ObstacleAdapter::Convert(source, &obstacle);
+  EXPECT_TRUE(result.ok) << result.message;
+  return obstacle;
+}
+
+std::vector<Obstacle> ConvertObstacles(
+    const excavator_interfaces::msg::PlanningScene& scene) {
+  std::vector<Obstacle> obstacles;
+  const ValidationResult result =
+      ObstacleAdapter::Convert(scene.objects, &obstacles);
+  EXPECT_TRUE(result.ok) << result.message;
+  return obstacles;
+}
+
 std::string ReadFile(const std::string& path) {
   std::ifstream file(path);
   if (!file) {
@@ -188,10 +253,12 @@ TEST(FclCollisionCheckerTest, DetectsEnvironmentCollision) {
   scene.header.frame_id = "base_link";
   scene.objects.push_back(MakeSphere("obstacle", 0.4, 0.0, 0.0, 0.15));
 
-  const CollisionCheckResult result = checker.CheckState({0.0}, scene);
+  const auto obstacles = ConvertObstacles(scene);
+  const CollisionCheckResult result =
+      checker.CheckCollision({0.0}, obstacles);
   ASSERT_TRUE(result.valid) << result.message;
   EXPECT_TRUE(result.collision);
-  EXPECT_EQ(result.second_object, "obstacle");
+  EXPECT_EQ(result.second_object, AdaptedId("obstacle"));
 }
 
 TEST(FclCollisionCheckerTest, AcceptsClearEnvironment) {
@@ -205,9 +272,101 @@ TEST(FclCollisionCheckerTest, AcceptsClearEnvironment) {
   scene.header.frame_id = "base_link";
   scene.objects.push_back(MakeSphere("far_obstacle", 10.0, 10.0, 10.0, 0.1));
 
-  const CollisionCheckResult result = checker.CheckState({0.0}, scene);
+  const auto obstacles = ConvertObstacles(scene);
+  const CollisionCheckResult result =
+      checker.CheckCollision({0.0}, obstacles);
   ASSERT_TRUE(result.valid) << result.message;
   EXPECT_FALSE(result.collision);
+}
+
+TEST(FclCollisionCheckerTest, DetectsPointCloudEnvironmentCollision) {
+  SingleJointKinematics kinematics;
+  FclCollisionChecker checker;
+  const auto initialized = InitializeChecker(&checker, kCollisionYaml,
+                                             &kinematics);
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  scene.objects.push_back(MakePointCloudObject(
+      "cloud", {Eigen::Vector3d(0.45, 0.0, 0.0),
+                Eigen::Vector3d(0.40, 0.05, 0.0)}));
+
+  CollisionQueryOptions options;
+  options.obstacle_type = ObstacleType::kPointCloud;
+  options.point_cloud_resolution = 0.02;
+
+  const auto obstacles = ConvertObstacles(scene);
+  const CollisionCheckResult result =
+      checker.CheckEnvironmentCollision({0.0}, obstacles, options);
+  ASSERT_TRUE(result.valid) << result.message;
+  EXPECT_TRUE(result.collision);
+  EXPECT_EQ(result.second_object, AdaptedId("cloud"));
+}
+
+TEST(FclCollisionCheckerTest, RejectsEmptyPointCloud) {
+  SingleJointKinematics kinematics;
+  FclCollisionChecker checker;
+  const auto initialized = InitializeChecker(&checker, kCollisionYaml,
+                                             &kinematics);
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  excavator_interfaces::msg::PlanningScene scene;
+  scene.header.frame_id = "base_link";
+  scene.objects.push_back(MakePointCloudObject("empty_cloud", {}));
+
+  CollisionQueryOptions options;
+  options.obstacle_type = ObstacleType::kPointCloud;
+
+  const auto obstacles = ConvertObstacles(scene);
+  const CollisionCheckResult result =
+      checker.CheckEnvironmentCollision({0.0}, obstacles, options);
+  EXPECT_FALSE(result.valid);
+  EXPECT_NE(result.message.find("point cloud is empty"), std::string::npos);
+}
+
+TEST(FclCollisionCheckerTest, ComputesDistanceToPointCloud) {
+  SingleJointKinematics kinematics;
+  FclCollisionChecker checker;
+  const auto initialized = InitializeChecker(&checker, kCollisionYaml,
+                                             &kinematics);
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  const auto obstacle = MakePointCloudObject(
+      "far_cloud", {Eigen::Vector3d(10.0, 10.0, 10.0)});
+  CollisionQueryOptions options;
+  options.obstacle_type = ObstacleType::kPointCloud;
+
+  const CollisionDistanceResult distance =
+      checker.ComputeDistance({0.0}, ConvertObstacle(obstacle), options);
+  ASSERT_TRUE(distance.valid) << distance.message;
+  EXPECT_GT(distance.distance, 1.0);
+  EXPECT_EQ(distance.obstacle_id, AdaptedId("far_cloud"));
+}
+
+TEST(FclCollisionCheckerTest, ChecksPointCloudPathWithSingleObstacle) {
+  SingleJointKinematics kinematics;
+  FclCollisionChecker checker;
+  const auto initialized = InitializeChecker(&checker, kCollisionYaml,
+                                             &kinematics);
+  ASSERT_TRUE(initialized.ok) << initialized.message;
+
+  // A point on the tool sphere's swept arc, clear at both path endpoints.
+  const double angle = 0.5;
+  const auto obstacle = MakePointCloudObject(
+      "swept_cloud",
+      {Eigen::Vector3d(1.4 * std::cos(angle), 1.4 * std::sin(angle), 0.0)});
+  CollisionQueryOptions options;
+  options.obstacle_type = ObstacleType::kPointCloud;
+
+  JointPath path;
+  path.joint_names = {"arm_joint"};
+  path.points = {{-1.0}, {1.0}};
+  const CollisionCheckResult result = checker.CheckPathCollision(
+      path, ConvertObstacle(obstacle), 0.05, options);
+  ASSERT_TRUE(result.valid) << result.message;
+  EXPECT_TRUE(result.collision);
+  EXPECT_GT(result.checked_states, 1.0);
 }
 
 TEST(FclCollisionCheckerTest, DetectsNonAdjacentSelfCollision) {
@@ -219,8 +378,9 @@ TEST(FclCollisionCheckerTest, DetectsNonAdjacentSelfCollision) {
 
   excavator_interfaces::msg::PlanningScene scene;
   scene.header.frame_id = "base_link";
+  const auto obstacles = ConvertObstacles(scene);
   const CollisionCheckResult result =
-      checker.CheckState({3.141592653589793}, scene);
+      checker.CheckCollision({3.141592653589793}, obstacles);
   ASSERT_TRUE(result.valid) << result.message;
   EXPECT_TRUE(result.collision);
   EXPECT_NE(result.message.find("self collision"), std::string::npos);
@@ -232,12 +392,13 @@ TEST(FclCollisionCheckerTest, HonoursAllowedCollisionPairs) {
   const auto initialized = InitializeChecker(&checker, kCollisionYaml,
                                              &kinematics);
   ASSERT_TRUE(initialized.ok) << initialized.message;
-  checker.SetAllowedCollisionPairs({{"base_link", "tool_link"}});
+  checker.SetAllowedCollision("base_link", "tool_link", true);
 
   excavator_interfaces::msg::PlanningScene scene;
   scene.header.frame_id = "base_link";
+  const auto obstacles = ConvertObstacles(scene);
   const CollisionCheckResult result =
-      checker.CheckState({3.141592653589793}, scene);
+      checker.CheckCollision({3.141592653589793}, obstacles);
   ASSERT_TRUE(result.valid) << result.message;
   EXPECT_FALSE(result.collision);
 }
@@ -252,7 +413,9 @@ TEST(FclCollisionCheckerTest, LoadsYamlStlCollisionMesh) {
   excavator_interfaces::msg::PlanningScene scene;
   scene.header.frame_id = "base_link";
   scene.objects.push_back(MakeSphere("mesh_surface", 0.2, 0.2, 0.0, 0.1));
-  const CollisionCheckResult result = checker.CheckState({0.0}, scene);
+  const auto obstacles = ConvertObstacles(scene);
+  const CollisionCheckResult result =
+      checker.CheckCollision({0.0}, obstacles);
   ASSERT_TRUE(result.valid) << result.message;
   EXPECT_TRUE(result.collision);
 }
@@ -286,18 +449,19 @@ TEST(FclCollisionCheckerTest, SamplesInteriorPathStates) {
   // The obstacle is clear at both endpoints but intersects the tool's swept
   // region at an intermediate joint value.
   scene.objects.push_back(MakeSphere("swept_obstacle", 1.1, 0.0, 0.0, 0.18));
+  const auto obstacles = ConvertObstacles(scene);
 
   JointPath path;
   path.joint_names = {"arm_joint"};
   path.points = {{-1.0}, {1.0}};
-  const CollisionCheckResult result = checker.CheckPath(path, scene, 0.05);
+  const CollisionCheckResult result =
+      checker.CheckPathCollision(path, obstacles, 0.05);
   EXPECT_TRUE(result.valid) << result.message;
   EXPECT_TRUE(result.collision);
   EXPECT_GT(result.checked_states, 1.0);
 
   const CollisionCheckResult obstacle_result =
-      checker.CheckPathCollisionWithObstacle(
-          path, scene, "swept_obstacle", 0.05);
+      checker.CheckPathCollision(path, obstacles.front(), 0.05);
   EXPECT_TRUE(obstacle_result.valid) << obstacle_result.message;
   EXPECT_TRUE(obstacle_result.collision);
 }
@@ -330,33 +494,33 @@ TEST(FclCollisionCheckerTest, SupportsScopedStateAndDistanceQueries) {
   scene.header.frame_id = "base_link";
   scene.objects.push_back(
       MakeSphere("distance_obstacle", 10.0, 10.0, 10.0, 0.1));
+  const auto obstacles = ConvertObstacles(scene);
 
   const CollisionCheckResult environment_result =
-      checker.CheckEnvironmentCollision({0.0}, scene);
+      checker.CheckEnvironmentCollision({0.0}, obstacles);
   ASSERT_TRUE(environment_result.valid) << environment_result.message;
   EXPECT_FALSE(environment_result.collision);
 
   const CollisionDistanceResult distance =
-      checker.ComputeDistanceToObstacle({0.0}, scene, "distance_obstacle");
+      checker.ComputeDistance({0.0}, obstacles.front());
   ASSERT_TRUE(distance.valid) << distance.message;
   EXPECT_GT(distance.distance, 0.0);
-  EXPECT_EQ(distance.obstacle_id, "distance_obstacle");
+  EXPECT_EQ(distance.obstacle_id, AdaptedId("distance_obstacle"));
   EXPECT_FALSE(distance.robot_link.empty());
 }
 
-TEST(FclCollisionCheckerTest, RejectsUnknownDistanceObstacle) {
+TEST(FclCollisionCheckerTest, RejectsEmptyDistanceObstacleId) {
   SingleJointKinematics kinematics;
   FclCollisionChecker checker;
   const auto initialized = InitializeChecker(&checker, kCollisionYaml,
                                              &kinematics);
   ASSERT_TRUE(initialized.ok) << initialized.message;
 
-  excavator_interfaces::msg::PlanningScene scene;
-  scene.header.frame_id = "base_link";
   const CollisionDistanceResult distance =
-      checker.ComputeDistanceToObstacle({0.0}, scene, "missing_obstacle");
+      checker.ComputeDistance({0.0}, Obstacle{});
   EXPECT_FALSE(distance.valid);
-  EXPECT_NE(distance.message.find("not found"), std::string::npos);
+  EXPECT_NE(distance.message.find("must be non-negative"),
+            std::string::npos);
 }
 
 TEST(FclCollisionCheckerTest, RunsWithDhKinematicsAndExcavatorCollisionYaml) {
@@ -379,11 +543,15 @@ TEST(FclCollisionCheckerTest, RunsWithDhKinematicsAndExcavatorCollisionYaml) {
   config.kinematics_reference_frame = "base_link";
   const auto initialized = checker.Initialize(config, &kinematics);
   ASSERT_TRUE(initialized.ok) << initialized.message;
-  checker.SetAllowedCollisionPairs({{"base_link", "boom_link"},
-                                    {"base_link", "stick_link"},
-                                    {"base_link", "bucket_link"},
-                                    {"swing_link", "stick_link"},
-                                    {"swing_link", "bucket_link"}});
+  for (const auto& pair :
+       std::vector<std::pair<std::string, std::string>>{
+           {"base_link", "boom_link"},
+           {"base_link", "stick_link"},
+           {"base_link", "bucket_link"},
+           {"swing_link", "stick_link"},
+           {"swing_link", "bucket_link"}}) {
+    checker.SetAllowedCollision(pair.first, pair.second, true);
+  }
 
   const JointPositions home = {0.0, -0.35, 0.45, -0.40};
   const CollisionCheckResult self_result = checker.CheckSelfCollision(home);
@@ -398,8 +566,9 @@ TEST(FclCollisionCheckerTest, RunsWithDhKinematicsAndExcavatorCollisionYaml) {
   scene.objects.push_back(MakeSphere(
       "bucket_obstacle", bucket_pose.position.x, bucket_pose.position.y,
       bucket_pose.position.z, 0.6));
+  const auto obstacles = ConvertObstacles(scene);
   const CollisionCheckResult environment_result =
-      checker.CheckEnvironmentCollision(home, scene);
+      checker.CheckEnvironmentCollision(home, obstacles);
   ASSERT_TRUE(environment_result.valid) << environment_result.message;
   EXPECT_TRUE(environment_result.collision);
 
@@ -407,12 +576,13 @@ TEST(FclCollisionCheckerTest, RunsWithDhKinematicsAndExcavatorCollisionYaml) {
   far_scene.header.frame_id = "base_link";
   far_scene.objects.push_back(
       MakeSphere("far_obstacle", 50.0, 50.0, 50.0, 0.5));
+  const auto far_obstacles = ConvertObstacles(far_scene);
   const CollisionDistanceResult distance =
-      checker.ComputeDistanceToObstacle(home, far_scene, "far_obstacle");
+      checker.ComputeDistance(home, far_obstacles.front());
   ASSERT_TRUE(distance.valid) << distance.message;
   EXPECT_GT(distance.distance, 0.0);
 }
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

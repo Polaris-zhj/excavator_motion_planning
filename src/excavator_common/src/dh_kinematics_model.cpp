@@ -6,7 +6,7 @@
 #include <cmath>
 #include <limits>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -453,4 +453,4 @@ InverseKinematicsResult DhKinematicsModel::SolveIK(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

@@ -9,7 +9,7 @@
 #include "kinematics/kinematics_interface.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 
@@ -55,6 +55,6 @@ class TrajectoryOccupancyVisualizer {
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_VISUALIZATION__TRAJECTORY_OCCUPANCY_VISUALIZER_HPP_

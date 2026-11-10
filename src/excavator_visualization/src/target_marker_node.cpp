@@ -28,7 +28,7 @@ const char kStartMarkerName[] = "bucket_tip_start";
 // inside the bucket/stick geometry.
 constexpr double kStartHandleOffsetY = 1.0;
 
-geometry_msgs::msg::Pose ToRosPose(const tramcar::planning::Pose3& pose) {
+geometry_msgs::msg::Pose ToRosPose(const excavator::planning::Pose3& pose) {
   geometry_msgs::msg::Pose message;
   message.position.x = pose.position.x;
   message.position.y = pose.position.y;
@@ -96,13 +96,13 @@ class TargetMarkerNode final : public rclcpp::Node {
     server_ = std::make_unique<interactive_markers::InteractiveMarkerServer>(
         "excavator_target", this);
 
-    tramcar::planning::Pose3 target_initial;
+    excavator::planning::Pose3 target_initial;
     target_initial.position.x = 3.5;
     target_initial.position.z = 1.0;
     CreateMarker(kTargetMarkerName,
                  "Drag to set the bucket_tip target pose", target_initial,
                  0.1F, 0.9F, 0.4F, false);
-    tramcar::planning::Pose3 start_initial = target_initial;
+    excavator::planning::Pose3 start_initial = target_initial;
     start_initial.position.y += kStartHandleOffsetY;
     CreateMarker(kStartMarkerName,
                  "Drag to set the planning start pose", start_initial, 0.2F,
@@ -122,7 +122,7 @@ class TargetMarkerNode final : public rclcpp::Node {
 
  private:
   void CreateMarker(const std::string& name, const std::string& description,
-                    const tramcar::planning::Pose3& initial_pose, float red,
+                    const excavator::planning::Pose3& initial_pose, float red,
                     float green, float blue, bool is_start) {
     visualization_msgs::msg::InteractiveMarker marker;
     marker.header.frame_id = frame_id_;
@@ -215,7 +215,7 @@ class TargetMarkerNode final : public rclcpp::Node {
         (user_moved_start_ && user_moved_target_)) {
       return;
     }
-    tramcar::planning::JointPositions positions;
+    excavator::planning::JointPositions positions;
     positions.reserve(joint_names_.size());
     for (const std::string& name : joint_names_) {
       const auto found =
@@ -230,7 +230,7 @@ class TargetMarkerNode final : public rclcpp::Node {
       }
       positions.push_back(message->position[index]);
     }
-    tramcar::planning::Pose3 pose;
+    excavator::planning::Pose3 pose;
     if (!kinematics_.GetLinkPose(positions, tip_link_, &pose).ok) {
       return;
     }
@@ -262,7 +262,7 @@ class TargetMarkerNode final : public rclcpp::Node {
       server_->setPose(kTargetMarkerName, ToRosPose(pose));
     }
     if (!user_moved_start_) {
-      tramcar::planning::Pose3 handle = pose;
+      excavator::planning::Pose3 handle = pose;
       handle.position.y += kStartHandleOffsetY;
       server_->setPose(kStartMarkerName, ToRosPose(handle));
     }
@@ -270,13 +270,13 @@ class TargetMarkerNode final : public rclcpp::Node {
   }
 
   std::vector<std::string> joint_names_;
-  tramcar::planning::UrdfKinematicsModel kinematics_;
+  excavator::planning::UrdfKinematicsModel kinematics_;
   std::string frame_id_;
   std::string tip_link_;
   bool kinematics_ready_{false};
   bool user_moved_target_{false};
   bool user_moved_start_{false};
-  tramcar::planning::Pose3 last_pose_;
+  excavator::planning::Pose3 last_pose_;
   std::chrono::steady_clock::time_point last_marker_update_{};
   std::unique_ptr<interactive_markers::InteractiveMarkerServer> server_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr

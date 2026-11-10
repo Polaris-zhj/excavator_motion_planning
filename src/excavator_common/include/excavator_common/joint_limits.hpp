@@ -8,7 +8,7 @@
 
 #include "excavator_common/joint_trajectory.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct JointLimit {
@@ -65,6 +65,6 @@ inline LimitCheckResult CheckJointVelocityLimits(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COMMON__JOINT_LIMITS_HPP_

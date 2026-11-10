@@ -10,7 +10,7 @@
 #include "excavator_common/robot_state.hpp"
 #include "excavator_sim_viz/controller_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct ExecutionStatusSnapshot {
@@ -110,6 +110,6 @@ class TrajectoryController final {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_SIM_VIZ__TRAJECTORY_CONTROLLER_HPP_

@@ -5,7 +5,7 @@
 
 #include "excavator_planning/planner_plugin.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Sampling-based asymptotically optimal planner. It is intentionally kept in
@@ -28,6 +28,6 @@ class RrtStarPlanner final : public PlannerPlugin {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_PLANNER_RRTSTAR__RRT_STAR_PLANNER_HPP_

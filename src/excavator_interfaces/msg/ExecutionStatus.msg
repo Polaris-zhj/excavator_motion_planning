@@ -1,4 +1,4 @@
-# Unified execution state constants. Must match tramcar::planning::ExecutionState.
+# Unified execution state constants. Must match excavator::planning::ExecutionState.
 uint8 IDLE=0
 uint8 VALIDATING=1
 uint8 READY=2

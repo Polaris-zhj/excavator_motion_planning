@@ -4,7 +4,7 @@
 
 #include "excavator_planning/baseline_planners.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 void PlannerFactory::Register(const std::string& name, Creator creator) {
@@ -48,4 +48,4 @@ PlannerFactory PlannerFactory::CreateDefault() {
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

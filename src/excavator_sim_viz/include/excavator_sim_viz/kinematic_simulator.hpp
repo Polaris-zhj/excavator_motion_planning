@@ -9,7 +9,7 @@
 #include "excavator_common/robot_state.hpp"
 #include "excavator_sim_viz/controller_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct SimulationState {
@@ -86,6 +86,6 @@ class KinematicSimulator final : public SimulatorInterface {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_SIM_VIZ__KINEMATIC_SIMULATOR_HPP_

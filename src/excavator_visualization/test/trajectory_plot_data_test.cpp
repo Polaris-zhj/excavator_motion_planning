@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -121,4 +121,4 @@ TEST(TrajectoryPlotDataTest, NewReferenceResetsMeasuredSamples) {
 }  // namespace
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

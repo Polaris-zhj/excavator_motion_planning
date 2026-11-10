@@ -11,7 +11,8 @@
 #include <vector>
 
 #include "builtin_interfaces/msg/duration.hpp"
-#include "excavator_collision/collision_checker.hpp"
+#include "excavator_collision/fcl_collision_checker.hpp"
+#include "excavator_collision/obstacle_adapter.hpp"
 #include "excavator_common/joint_trajectory.hpp"
 #include "excavator_common/robot_state.hpp"
 #include "excavator_interfaces/action/execute_trajectory.hpp"
@@ -32,21 +33,24 @@
 namespace excavator_sim_viz {
 namespace {
 
-using tramcar::planning::ControlCommand;
-using tramcar::planning::ExecutionState;
-using tramcar::planning::ExecutionStatusSnapshot;
-using tramcar::planning::JointPositions;
-using tramcar::planning::JointTrajectory;
-using tramcar::planning::JointTrajectoryPoint;
-using tramcar::planning::KinematicSimulator;
-using tramcar::planning::RobotState;
-using tramcar::planning::SimulationState;
-using tramcar::planning::TrajectoryController;
-using tramcar::planning::TrajectoryControllerConfig;
-using tramcar::planning::TrajectoryStepResult;
-using tramcar::planning::ValidationResult;
-using tramcar::planning::VelocityControllerConfig;
-using tramcar::planning::VelocityTrackingController;
+using excavator::planning::CollisionCheckResult;
+using excavator::planning::ControlCommand;
+using excavator::planning::ExecutionState;
+using excavator::planning::ExecutionStatusSnapshot;
+using excavator::planning::JointPositions;
+using excavator::planning::JointTrajectory;
+using excavator::planning::JointTrajectoryPoint;
+using excavator::planning::KinematicSimulator;
+using excavator::planning::Obstacle;
+using excavator::planning::ObstacleAdapter;
+using excavator::planning::RobotState;
+using excavator::planning::SimulationState;
+using excavator::planning::TrajectoryController;
+using excavator::planning::TrajectoryControllerConfig;
+using excavator::planning::TrajectoryStepResult;
+using excavator::planning::ValidationResult;
+using excavator::planning::VelocityControllerConfig;
+using excavator::planning::VelocityTrackingController;
 
 using Clock = std::chrono::steady_clock;
 using ExecuteAction = excavator_interfaces::action::ExecuteTrajectory;
@@ -127,12 +131,12 @@ class TrajectoryControllerNode final : public rclcpp::Node {
          "bucket_cyl_body_joint", "bucket_cyl_rod_joint",
          "bucket_linkage_joint", "stick_rocker_l_joint",
          "stick_rocker_r_joint"});
+    // The old coarse-box filter masked real bucket/chassis contacts. With the
+    // current mesh collision model, non-adjacent pairs are checked by default;
+    // structural exceptions can still be supplied through the parameter.
     const std::vector<std::string> allowed_collision_pairs =
         declare_parameter<std::vector<std::string>>(
-            "allowed_collision_pairs",
-            {"base_link:boom_link", "base_link:stick_link",
-             "base_link:bucket_link", "swing_link:stick_link",
-             "swing_link:bucket_link"});
+            "allowed_collision_pairs", std::vector<std::string>{});
     passive_joint_positions_ = declare_parameter<std::vector<double>>(
         "passive_joint_positions",
         {-0.30301, -0.23228, -0.30301, -0.23228, 0.04501, -0.36905,
@@ -171,11 +175,11 @@ class TrajectoryControllerNode final : public rclcpp::Node {
       } else {
         position_limits = kinematics_.GetPositionLimits();
         max_velocity = kinematics_.GetVelocityLimits();
-        collision_checker_ = tramcar::planning::CollisionCheckerFactory::
+        collision_checker_ = excavator::planning::CollisionCheckerFactory::
             Instance().Create(collision_backend);
         if (!collision_checker_) {
           std::string available;
-          for (const std::string& type : tramcar::planning::
+          for (const std::string& type : excavator::planning::
                    CollisionCheckerFactory::Instance().AvailableTypes()) {
             available += " " + type;
           }
@@ -183,7 +187,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
                        "Unknown collision backend '%s'; available:%s",
                        collision_backend.c_str(), available.c_str());
         } else {
-          tramcar::planning::CollisionModelConfig collision_config;
+          excavator::planning::CollisionModelConfig collision_config;
           collision_config.joint_names = joint_names_;
           collision_config.model_format = "yaml";
           collision_config.kinematics_reference_frame = "base_link";
@@ -226,7 +230,10 @@ class TrajectoryControllerNode final : public rclcpp::Node {
             allowed_pairs.emplace_back(entry.substr(0, separator),
                                        entry.substr(separator + 1));
           }
-          collision_checker_->SetAllowedCollisionPairs(allowed_pairs);
+          for (const auto& pair : allowed_pairs) {
+            collision_checker_->SetAllowedCollision(pair.first, pair.second,
+                                                    true);
+          }
           collision_ready_ = true;
           }
         }
@@ -280,7 +287,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
         std::move(controller_config),
         std::make_unique<VelocityTrackingController>(velocity_config));
 
-    tramcar::planning::SimulatorLimits simulator_limits;
+    excavator::planning::SimulatorLimits simulator_limits;
     simulator_limits.max_velocity = velocity_config.max_velocity;
     simulator_limits.max_acceleration = velocity_config.max_acceleration;
     simulator_limits.lower_position_limits =
@@ -431,8 +438,16 @@ class TrajectoryControllerNode final : public rclcpp::Node {
           scene.header.frame_id.clear();
         }
       }
-      const auto collision = collision_checker_->CheckTrajectory(
-          trajectory, scene, max_collision_joint_step_);
+      std::vector<Obstacle> obstacles;
+      const ValidationResult obstacle_result =
+          ObstacleAdapter::Convert(scene.objects, &obstacles);
+      CollisionCheckResult collision;
+      if (obstacle_result.ok) {
+        collision = collision_checker_->CheckTrajectory(
+            trajectory, obstacles, max_collision_joint_step_);
+      } else {
+        collision.message = obstacle_result.message;
+      }
       if (!collision.valid || collision.collision) {
         RCLCPP_WARN(get_logger(), "Trajectory update rejected by collision "
                                   "validation: %s",
@@ -482,7 +497,7 @@ class TrajectoryControllerNode final : public rclcpp::Node {
     const JointTrajectory trajectory =
         ToCoreTrajectory(goal->trajectory.joint_names, goal->trajectory.points);
     const ValidationResult validation =
-        tramcar::planning::ValidateJointTrajectory(trajectory);
+        excavator::planning::ValidateJointTrajectory(trajectory);
     if (!validation.ok || trajectory.joint_names != joint_names_) {
       RCLCPP_WARN(get_logger(), "Rejecting invalid execution trajectory: %s",
                   validation.ok ? "joint order mismatch"
@@ -564,8 +579,16 @@ class TrajectoryControllerNode final : public rclcpp::Node {
           scene.header.frame_id.clear();
         }
       }
-      const auto collision = collision_checker_->CheckTrajectory(
-          trajectory, scene, max_collision_joint_step_);
+      std::vector<Obstacle> obstacles;
+      const ValidationResult obstacle_result =
+          ObstacleAdapter::Convert(scene.objects, &obstacles);
+      CollisionCheckResult collision;
+      if (obstacle_result.ok) {
+        collision = collision_checker_->CheckTrajectory(
+            trajectory, obstacles, max_collision_joint_step_);
+      } else {
+        collision.message = obstacle_result.message;
+      }
       if (!collision.valid || collision.collision) {
         failure = "final trajectory collision validation failed: " +
                   collision.message;
@@ -788,8 +811,8 @@ class TrajectoryControllerNode final : public rclcpp::Node {
 
   std::vector<std::string> joint_names_;
   std::vector<double> initial_positions_;
-  tramcar::planning::UrdfKinematicsModel kinematics_;
-  std::unique_ptr<tramcar::planning::CollisionChecker> collision_checker_;
+  excavator::planning::UrdfKinematicsModel kinematics_;
+  std::unique_ptr<excavator::planning::CollisionChecker> collision_checker_;
   std::unique_ptr<TrajectoryController> controller_;
   std::unique_ptr<KinematicSimulator> simulator_;
   bool collision_ready_{false};

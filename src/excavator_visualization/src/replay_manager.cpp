@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 namespace {
@@ -253,4 +253,4 @@ bool ReplayManager::LoadStates(const std::string& path,
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

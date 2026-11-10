@@ -14,32 +14,34 @@ find_package(Eigen3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(shape_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(excavator_common REQUIRED)
 find_package(excavator_interfaces REQUIRED)
 
-# Vendored FCL 0.7.0 subset (collision_detection/third_library/fcl). The
+# Vendored FCL 0.7.0 subset (third_library/fcl). The
 # target deliberately has a different name from the system FCL package and is
 # linked privately, so no FCL headers or types escape this package.
 if(NOT TARGET excavator_fcl)
   add_subdirectory(
-    "${CMAKE_CURRENT_SOURCE_DIR}/collision_detection/third_library/fcl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_library/fcl"
     "${CMAKE_CURRENT_BINARY_DIR}/fcl_vendor")
 endif()
 
 # Shared library: the vendored FCL static library is linked privately and its
 # symbols stay inside this library, so consumers do not need FCL.
 add_library(excavator_collision SHARED
-  collision_detection/src/collision_checker.cpp
-  collision_detection/src/robot_collision_model.cpp
-  collision_detection/third_library/fcl_collision_model.cpp
-  src/collision_checker_factory.cpp)
+  src/fcl_collision_checker.cpp
+  src/robot_collision_geometry_model.cpp
+  src/fcl_collision_model_builder.cpp
+  src/collision_checker_factory.cpp
+  src/obstacle_adapter.cpp)
 
 target_include_directories(excavator_collision
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/collision_detection/third_library)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Keep the vendored FCL private: it must not become part of the exported
 # interface. Explicit imported targets are used instead of
@@ -54,6 +56,7 @@ target_link_libraries(excavator_collision
   PUBLIC
     ${geometry_msgs_TARGETS}
     ${shape_msgs_TARGETS}
+    ${sensor_msgs_TARGETS}
     excavator_common::excavator_common
     ${excavator_interfaces_TARGETS})
 

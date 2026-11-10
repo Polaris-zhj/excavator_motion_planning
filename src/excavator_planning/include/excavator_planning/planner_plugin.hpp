@@ -8,7 +8,7 @@
 
 #include "excavator_common/planner_interfaces.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Configuration passed to every planner plugin. Sampling planners use the
@@ -43,6 +43,6 @@ class PlannerPlugin : public PathPlanner {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_PLANNING__PLANNER_PLUGIN_HPP_

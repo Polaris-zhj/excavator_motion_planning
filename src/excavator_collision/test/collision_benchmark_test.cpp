@@ -1,4 +1,4 @@
-#include "excavator_collision/collision_checker.hpp"
+#include "excavator_collision/fcl_collision_checker.hpp"
 
 #include <gtest/gtest.h>
 
@@ -8,9 +8,10 @@
 #include <iterator>
 #include <string>
 
+#include "excavator_interfaces/msg/planning_scene.hpp"
 #include "kinematics/dh_kinematics_model.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -44,33 +45,35 @@ TEST(FclCollisionCheckerTest, BenchmarksFullExcavatorModel) {
   config.kinematics_reference_frame = "base_link";
   const auto initialized = checker.Initialize(config, &kinematics);
   ASSERT_TRUE(initialized.ok) << initialized.message;
-  checker.SetAllowedCollisionPairs(
-      {{"base_link", "boom_link"},
-       {"base_link", "stick_link"},
-       {"base_link", "bucket_link"},
-       {"swing_link", "stick_link"},
-       {"swing_link", "bucket_link"}});
+  const std::vector<std::pair<std::string, std::string>> allowed_pairs = {
+      {"base_link", "boom_link"},
+      {"base_link", "stick_link"},
+      {"base_link", "bucket_link"},
+      {"swing_link", "stick_link"},
+      {"swing_link", "bucket_link"}};
+  for (const auto& pair : allowed_pairs) {
+    checker.SetAllowedCollision(pair.first, pair.second, true);
+  }
 
-  excavator_interfaces::msg::PlanningScene scene;
-  scene.header.frame_id = "base_link";
+  const ObstacleList obstacles;
   const JointPositions home = {0.0, -0.35, 0.45, -0.40};
-  CollisionCheckResult result = checker.CheckState(home, scene);
+  CollisionCheckResult result = checker.CheckCollision(home, obstacles);
   ASSERT_TRUE(result.valid) << result.message;
   ASSERT_FALSE(result.collision) << result.message;
 
   constexpr int kIterations = 200;
   const auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < kIterations; ++i) {
-    result = checker.CheckState(home, scene);
+    result = checker.CheckCollision(home, obstacles);
   }
   const double seconds =
       std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
           .count();
-  std::cout << "CheckState average: " << 1000.0 * seconds / kIterations
+  std::cout << "CheckCollision average: " << 1000.0 * seconds / kIterations
             << " ms" << std::endl;
   EXPECT_TRUE(result.valid);
 }
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

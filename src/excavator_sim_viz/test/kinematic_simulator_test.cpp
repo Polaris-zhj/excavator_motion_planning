@@ -2,12 +2,12 @@
 
 #include <gtest/gtest.h>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
-tramcar::planning::JointTrajectory MakeTrajectory() {
-  tramcar::planning::JointTrajectory trajectory;
+excavator::planning::JointTrajectory MakeTrajectory() {
+  excavator::planning::JointTrajectory trajectory;
   trajectory.joint_names = {"joint_a"};
   trajectory.points = {{0.0, {0.0}, {}, {}}, {1.0, {1.0}, {}, {}}};
   return trajectory;
@@ -97,4 +97,4 @@ TEST(KinematicSimulatorTest, RejectsCommandModeDuringTrajectoryPlayback) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

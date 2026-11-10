@@ -5,7 +5,7 @@
 
 #include "excavator_sim_viz/controller_interface.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct VelocityControllerConfig {
@@ -39,6 +39,6 @@ class VelocityTrackingController final : public ControllerInterface {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_SIM_VIZ__VELOCITY_TRACKING_CONTROLLER_HPP_

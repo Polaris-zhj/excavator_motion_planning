@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 using JointPositions = std::vector<double>;
@@ -198,6 +198,6 @@ inline ValidationResult ValidateJointTrajectory(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_COMMON__JOINT_TRAJECTORY_HPP_

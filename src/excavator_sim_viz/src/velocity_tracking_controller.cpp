@@ -4,7 +4,7 @@
 #include <cmath>
 #include <utility>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -129,4 +129,4 @@ ControllerOutput VelocityTrackingController::ComputeCommand(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

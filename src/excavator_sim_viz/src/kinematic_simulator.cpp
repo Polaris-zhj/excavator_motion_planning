@@ -4,7 +4,7 @@
 #include <cmath>
 #include <utility>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -262,4 +262,4 @@ const JointPositions& KinematicSimulator::velocities() const {
 bool KinematicSimulator::HasSafetyFault() const { return safety_fault_; }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 PathPostProcessor::PathPostProcessor(std::size_t max_iterations)
@@ -111,4 +111,4 @@ ValidationResult PathPostProcessor::Smooth(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

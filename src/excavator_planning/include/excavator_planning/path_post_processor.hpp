@@ -7,7 +7,7 @@
 
 #include "excavator_common/joint_trajectory.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 // Path simplification/smoothing are kept separate from time parameterization
@@ -42,6 +42,6 @@ class PathPostProcessor {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_PLANNING__PATH_POST_PROCESSOR_HPP_

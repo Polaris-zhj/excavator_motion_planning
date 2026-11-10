@@ -695,7 +695,7 @@ void ExcavatorPlanningPanel::ApplyObstacleChange(bool update) {
   size.y = obstacle_sy_->value();
   size.z = obstacle_sz_->value();
   const std::string id = obstacle_id_edit_->text().toStdString();
-  tramcar::planning::ValidationResult result;
+  excavator::planning::ValidationResult result;
   if (update) {
     result = scene_manager_.UpdateBox(id, pose, size);
     if (!result.ok &&
@@ -720,7 +720,7 @@ void ExcavatorPlanningPanel::RefreshObstacleMarkers() {
   }
   obstacle_server_->clear();
   const auto objects = scene_manager_.Objects();
-  for (const tramcar::planning::visualization::BoxObstacle& box : objects) {
+  for (const excavator::planning::visualization::BoxObstacle& box : objects) {
     visualization_msgs::msg::InteractiveMarker marker;
     marker.header.frame_id = scene_manager_.frame_id();
     marker.header.stamp = node_->now();
@@ -784,7 +784,7 @@ void ExcavatorPlanningPanel::RefreshObstacleMarkers() {
           const auto current_objects = scene_manager_.Objects();
           const auto found = std::find_if(
               current_objects.begin(), current_objects.end(),
-              [&id](const tramcar::planning::visualization::BoxObstacle&
+              [&id](const excavator::planning::visualization::BoxObstacle&
                         candidate) { return candidate.id == id; });
           if (found == current_objects.end()) {
             return;

@@ -8,7 +8,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace visualization {
 
@@ -43,6 +43,6 @@ class TrajectoryVisualizer {
 
 }  // namespace visualization
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // EXCAVATOR_VISUALIZATION__TRAJECTORY_VISUALIZER_HPP_

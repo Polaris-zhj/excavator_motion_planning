@@ -27,8 +27,8 @@
 namespace excavator_visualization {
 namespace {
 
-using tramcar::planning::visualization::PlotQuantity;
-using tramcar::planning::visualization::PlotSeries;
+using excavator::planning::visualization::PlotQuantity;
+using excavator::planning::visualization::PlotSeries;
 
 double ToSeconds(const builtin_interfaces::msg::Duration& duration) {
   return static_cast<double>(duration.sec) +
@@ -40,13 +40,13 @@ double ToSeconds(const builtin_interfaces::msg::Time& time) {
          static_cast<double>(time.nanosec) * 1.0e-9;
 }
 
-tramcar::planning::JointTrajectory ToCoreTrajectory(
+excavator::planning::JointTrajectory ToCoreTrajectory(
     const trajectory_msgs::msg::JointTrajectory& message) {
-  tramcar::planning::JointTrajectory trajectory;
+  excavator::planning::JointTrajectory trajectory;
   trajectory.joint_names = message.joint_names;
   trajectory.points.reserve(message.points.size());
   for (const auto& message_point : message.points) {
-    tramcar::planning::JointTrajectoryPoint point;
+    excavator::planning::JointTrajectoryPoint point;
     point.t = ToSeconds(message_point.time_from_start);
     point.positions = message_point.positions;
     point.velocities = message_point.velocities;
@@ -507,7 +507,7 @@ void ExcavatorJointPlotPanel::onInitialize() {
 
 void ExcavatorJointPlotPanel::HandleTrajectory(
     const trajectory_msgs::msg::JointTrajectory& message) {
-  const tramcar::planning::JointTrajectory trajectory =
+  const excavator::planning::JointTrajectory trajectory =
       ToCoreTrajectory(message);
   std::lock_guard<std::mutex> lock(mutex_);
   plot_data_.SetReference(trajectory);
@@ -571,7 +571,7 @@ void ExcavatorJointPlotPanel::HandleJointState(
       return;
     }
   }
-  tramcar::planning::RobotState state;
+  excavator::planning::RobotState state;
   state.positions.reserve(joint_names_.size());
   state.velocities.reserve(joint_names_.size());
   for (const std::string& name : joint_names_) {
@@ -592,13 +592,13 @@ void ExcavatorJointPlotPanel::HandleJointState(
   // Do not plot those states as if they were part of the new reference: wait
   // until the measured joints reach the trajectory start, anchor that instant
   // to t=0, and start a fresh curve when a teleport or clock restart is seen.
-  const tramcar::planning::JointTrajectory reference =
+  const excavator::planning::JointTrajectory reference =
       plot_data_.GetReference();
   if (reference.points.empty() ||
       reference.points.front().positions.size() != state.positions.size()) {
     return;
   }
-  const tramcar::planning::visualization::MeasuredSampleAlignment alignment =
+  const excavator::planning::visualization::MeasuredSampleAlignment alignment =
       aligner_.Update(sample_time, reference.points.front().positions,
                       state.positions);
   if (alignment.restarted) {

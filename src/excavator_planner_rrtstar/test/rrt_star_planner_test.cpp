@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -179,4 +179,4 @@ TEST(RrtStarPlannerTest, HandlesStartEqualsGoal) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

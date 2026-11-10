@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstddef>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 ValidationResult LinearTrajectoryInterpolator::Sample(
@@ -79,4 +79,4 @@ ValidationResult LinearTrajectoryInterpolator::Sample(
 }
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

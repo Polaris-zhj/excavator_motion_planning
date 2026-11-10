@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -163,4 +163,4 @@ TEST_F(DhKinematicsTest, RejectsUnknownLink) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

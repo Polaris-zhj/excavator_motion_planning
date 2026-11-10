@@ -4,7 +4,7 @@
 
 #include <limits>
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 namespace {
 
@@ -95,4 +95,4 @@ TEST(WorkspaceCheckerTest, RejectsInvalidConfiguration) {
 
 }  // namespace
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator

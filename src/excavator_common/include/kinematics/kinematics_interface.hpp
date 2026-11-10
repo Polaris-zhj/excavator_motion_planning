@@ -7,7 +7,7 @@
 
 #include "excavator_common/joint_trajectory.hpp"
 
-namespace tramcar {
+namespace excavator {
 namespace planning {
 
 struct Vector3 {
@@ -81,6 +81,6 @@ class KinematicsModel {
 };
 
 }  // namespace planning
-}  // namespace tramcar
+}  // namespace excavator
 
 #endif  // KINEMATICS__KINEMATICS_INTERFACE_HPP_
