@@ -112,17 +112,6 @@ KinematicsResult KinematicsModel::Initialize(
         KinematicsStatus::kInvalidArgument,
         "root_link cannot have a parent Joint");
   }
-  if (description.joint_order.size() !=
-      static_cast<std::size_t>(std::count_if(
-          description.joints.begin(), description.joints.end(),
-          [](const JointModel& joint) {
-            return joint.type != JointType::kFixed;
-          }))) {
-    return KinematicsResult::Failure(
-        KinematicsStatus::kInvalidArgument,
-        "joint_order must contain every movable Joint exactly once");
-  }
-
   for (std::size_t i = 0; i < description.joint_order.size(); ++i) {
     const std::string& joint_name = description.joint_order[i];
     const auto found = joint_indices_.find(joint_name);
