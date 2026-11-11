@@ -100,6 +100,22 @@ TEST(KdlKinematicsTest, ComputesJacobianInRootFrameAndModelOrder) {
   EXPECT_NEAR(jacobian(5, 2), 1.0, 1.0e-9);
 }
 
+TEST(KdlKinematicsTest, ComputesRelativePoseBetweenLinks) {
+  auto model = MakePlanarArm();
+  ASSERT_NE(model, nullptr);
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
+
+  JointVector q = JointVector::Zero(3);
+  Pose relative_pose;
+  const KinematicsResult result =
+      solver->GetRelativePose(q, "link1", "tip", &relative_pose);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_NEAR(relative_pose.position.x(), 3.5, 1.0e-9);
+  EXPECT_NEAR(relative_pose.position.y(), 0.0, 1.0e-9);
+}
+
 TEST(KdlKinematicsTest, SolvesIkAndVerifiesFk) {
   auto model = MakePlanarArm();
   ASSERT_NE(model, nullptr);
