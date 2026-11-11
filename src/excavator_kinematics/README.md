@@ -38,14 +38,14 @@ T_reference_target = inverse(T_root_reference) * T_root_target
 - JointModel.origin 表示 Parent Link 到 Joint 零位坐标系的固定变换。
 - JointModel.axis 在 Joint 零位坐标系下表达，正方向遵循右手定则。
 - revolute / continuous 的位置单位为 rad；prismatic 的位置单位为 m。
-- joint_order 是调用方 JointVector 的唯一顺序；每个非固定关节必须且只能出现一次。固定关节不占用向量维度。
+- joint_order 是调用方 JointVector 的唯一顺序，只列出独立活动关节。未列入 joint_order 的可动关节保留在拓扑中，但在当前模型中按 q = 0 锁定；固定关节也不占用向量维度。
 - Jacobian 为 6×N，前三行为线速度、后三行为角速度，表达在 root_link 坐标系，参考点为目标 Link 原点。
 
 ## 4. 模型输入
 
 ### URDF
 
-UrdfModelConverter::FromFile / FromString 读取 URDF，转换 Link 树、fixed / revolute / continuous / prismatic Joint、origin、axis 和限位。不支持的关节类型会返回错误。URDF 中所有非固定关节按树遍历顺序构成活动关节顺序；若模型含有不应参与求解的被动关节，需要在输入模型阶段明确筛选，避免把被动机构误当作规划自由度。
+UrdfModelConverter::FromFile / FromString 读取 URDF，转换 Link 树、fixed / revolute / continuous / prismatic Joint、origin、axis 和限位。不支持的关节类型会返回错误。默认情况下，URDF 中所有非固定关节按树遍历顺序构成活动关节顺序。也可以向 FromFile / FromString 传入 active_joint_order，只选择独立规划关节；其余可动关节保留在拓扑中并锁定在 q = 0，适用于当前阶段暂不建模的液压缸或被动连杆自由度。
 
 ### 自定义 YAML
 
