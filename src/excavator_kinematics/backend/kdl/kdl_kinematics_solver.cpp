@@ -293,8 +293,8 @@ IkResult KdlKinematicsSolver::InverseKinematics(
       options.max_iterations == 0 ||
       !std::isfinite(options.position_tolerance) ||
       !std::isfinite(options.orientation_tolerance) ||
-      request.options.position_tolerance <= 0.0 ||
-      request.options.orientation_tolerance <= 0.0) {
+      options.position_tolerance <= 0.0 ||
+      options.orientation_tolerance <= 0.0) {
     output.result = KinematicsResult::Failure(
         KinematicsStatus::kInvalidArgument,
         "IK target, pose, iteration count and tolerances must be valid");
@@ -310,8 +310,8 @@ IkResult KdlKinematicsSolver::InverseKinematics(
     const double position_error = request.target_pose.position.norm();
     const double orientation_error = OrientationError(
         Eigen::Quaterniond::Identity(), request.target_pose.orientation);
-    if (position_error > request.options.position_tolerance ||
-        orientation_error > request.options.orientation_tolerance) {
+    if (position_error > options.position_tolerance ||
+        orientation_error > options.orientation_tolerance) {
       output.result = KinematicsResult::Failure(
           KinematicsStatus::kNoConvergence,
           "root_link is fixed and cannot reach a non-identity target pose");
@@ -343,7 +343,7 @@ IkResult KdlKinematicsSolver::InverseKinematics(
   }
   const KDL::Frame target = KdlTypeConverter::ToKdlFrame(request.target_pose);
   KDL::JntArray solution(seed.rows());
-  const int code = bundle->SolveIk(seed, target, request.options,
+  const int code = bundle->SolveIk(seed, target, options,
                                    options.enforce_joint_limits,
                                    &solution);
   if (code != KDL::SolverI::E_NOERROR) {
@@ -386,8 +386,8 @@ IkResult KdlKinematicsSolver::InverseKinematics(
       (achieved_pose.position - request.target_pose.position).norm();
   output.orientation_error = OrientationError(
       request.target_pose.orientation, achieved_pose.orientation);
-  if (output.position_error > request.options.position_tolerance ||
-      output.orientation_error > request.options.orientation_tolerance) {
+  if (output.position_error > options.position_tolerance ||
+      output.orientation_error > options.orientation_tolerance) {
     output.result = KinematicsResult::Failure(
         KinematicsStatus::kNoConvergence,
         "IK candidate failed FK pose verification");
