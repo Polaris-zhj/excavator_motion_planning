@@ -58,7 +58,8 @@ target_include_directories(excavator_kinematics
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${KDL_DIR})
 target_link_libraries(excavator_kinematics
-  PRIVATE excavator_kdl Eigen3::Eigen yaml-cpp)
+  PUBLIC Eigen3::Eigen yaml-cpp
+  PRIVATE excavator_kdl)
 ament_target_dependencies(excavator_kinematics urdf)
 target_compile_options(excavator_kinematics PRIVATE
   -Wall -Wextra -Wpedantic)
