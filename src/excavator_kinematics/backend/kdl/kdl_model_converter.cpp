@@ -81,7 +81,12 @@ KinematicsResult KdlModelConverter::BuildChain(
   KdlChainDescription converted;
   for (const JointModel* joint : reversed_path) {
     const KDL::Joint kdl_joint = ToKdlJoint(*joint);
-    const KDL::Frame frame_to_tip = ToKdlFrame(joint->origin);
+    KDL::Frame frame_to_tip = ToKdlFrame(joint->origin);
+    if (joint->type != JointType::kFixed) {
+      // KDL::Joint::pose(q) already applies the joint-origin translation.
+      // Only the fixed origin rotation belongs in Segment::f_tip here.
+      frame_to_tip.p = KDL::Vector::Zero();
+    }
     converted.chain.addSegment(
         KDL::Segment(joint->child_link, kdl_joint, frame_to_tip));
     if (joint->type != JointType::kFixed) {
