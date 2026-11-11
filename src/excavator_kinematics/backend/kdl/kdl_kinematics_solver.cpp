@@ -7,6 +7,8 @@
 
 #include <Eigen/Geometry>
 
+#include "chainiksolvervel_wdls.hpp"
+
 #include "excavator_kinematics/backend/kdl/kdl_type_converter.hpp"
 
 namespace tramcar::planning {
