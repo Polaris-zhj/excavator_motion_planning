@@ -3,7 +3,6 @@
 #include <cmath>
 #include <memory>
 
-#include "excavator_kinematics/backend/kdl/kdl_kinematics_solver.hpp"
 #include "excavator_kinematics/kinematics_solver_factory.hpp"
 
 namespace tramcar::planning {
@@ -61,13 +60,14 @@ std::shared_ptr<KinematicsModel> MakePlanarArm() {
 TEST(KdlKinematicsTest, ComputesRootRelativeForwardKinematics) {
   auto model = MakePlanarArm();
   ASSERT_NE(model, nullptr);
-  KdlKinematicsSolver solver;
-  ASSERT_TRUE(solver.Initialize(model).ok());
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
 
   JointVector q(3);
   q << kPi / 6.0, -kPi / 3.0, kPi / 9.0;
   Pose pose;
-  const KinematicsResult result = solver.GetLinkPose(q, "tip", &pose);
+  const KinematicsResult result = solver->GetLinkPose(q, "tip", &pose);
   ASSERT_TRUE(result.ok()) << result.message;
 
   EXPECT_NEAR(pose.position.x(), 5.748, 2.0e-3);
@@ -85,7 +85,7 @@ TEST(KdlKinematicsTest, ComputesJacobianInRootFrameAndModelOrder) {
 
   JointVector q = JointVector::Zero(3);
   JacobianMatrix jacobian;
-  const KinematicsResult result = solver.GetJacobian(q, "tip", &jacobian);
+  const KinematicsResult result = solver->GetJacobian(q, "tip", &jacobian);
   ASSERT_TRUE(result.ok()) << result.message;
   ASSERT_EQ(jacobian.rows(), 6);
   ASSERT_EQ(jacobian.cols(), 3);
@@ -119,7 +119,7 @@ TEST(KdlKinematicsTest, SolvesIkAndVerifiesFk) {
   request.initial_q(2) += 0.01;
   request.options.position_tolerance = 1.0e-6;
   request.options.orientation_tolerance = 1.0e-6;
-  const IkResult result = solver.InverseKinematics(request);
+  const IkResult result = solver->InverseKinematics(request);
   ASSERT_TRUE(result.result.ok()) << result.result.message;
   EXPECT_NEAR(result.position_error, 0.0, 1.0e-6);
   EXPECT_NEAR(result.orientation_error, 0.0, 1.0e-6);
