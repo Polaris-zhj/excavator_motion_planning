@@ -87,12 +87,9 @@ KinematicsResult KdlModelConverter::BuildChain(
     const KDL::Joint kdl_joint =
         is_active ? ToKdlJoint(*joint)
                   : KDL::Joint(joint->name, KDL::Joint::Fixed);
-    KDL::Frame frame_to_tip = ToKdlFrame(joint->origin);
-    if (is_active) {
-      // KDL::Joint::pose(q) already applies the joint-origin translation.
-      // Only the fixed origin rotation belongs in Segment::f_tip here.
-      frame_to_tip.p = KDL::Vector::Zero();
-    }
+    // Segment factors out Joint::pose(0) internally, so pass the complete
+    // zero-position Parent-Link-to-Child-Link transform here.
+    const KDL::Frame frame_to_tip = ToKdlFrame(joint->origin);
     converted.chain.addSegment(
         KDL::Segment(joint->child_link, kdl_joint, frame_to_tip));
     if (is_active) {
