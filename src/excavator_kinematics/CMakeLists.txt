@@ -16,7 +16,7 @@ find_package(yaml-cpp REQUIRED)
 # Only the Orocos KDL source files needed by FK, Jacobian and NR_JL IK are
 # compiled. The full upstream source snapshot is retained under third_library.
 set(KDL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_library/KDL")
-add_library(excavator_kdl STATIC
+add_library(excavator_kdl SHARED
   ${KDL_DIR}/frames.cpp
   ${KDL_DIR}/joint.cpp
   ${KDL_DIR}/segment.cpp
@@ -32,14 +32,13 @@ add_library(excavator_kdl STATIC
   ${KDL_DIR}/utilities/utility.cxx
   ${KDL_DIR}/utilities/error_stack.cxx
   ${KDL_DIR}/utilities/svd_eigen_HH.cpp)
-target_include_directories(excavator_kdl PUBLIC ${KDL_DIR})
-target_link_libraries(excavator_kdl PUBLIC Eigen3::Eigen)
+target_include_directories(excavator_kdl PRIVATE ${KDL_DIR})
+target_link_libraries(excavator_kdl PRIVATE Eigen3::Eigen)
 set_target_properties(excavator_kdl PROPERTIES
   POSITION_INDEPENDENT_CODE ON
   CXX_STANDARD 17
   CXX_STANDARD_REQUIRED ON)
-target_compile_options(excavator_kdl PRIVATE
-  -w -fvisibility=hidden -fvisibility-inlines-hidden)
+target_compile_options(excavator_kdl PRIVATE -w)
 
 add_library(excavator_kinematics SHARED
   kinematics/kinematics_model.cpp
@@ -81,6 +80,7 @@ if(BUILD_TESTING)
   target_link_libraries(kdl_kinematics_test excavator_kinematics)
 endif()
 
+install(TARGETS excavator_kdl LIBRARY DESTINATION lib)
 install(TARGETS excavator_kinematics EXPORT excavator_kinematicsTargets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
