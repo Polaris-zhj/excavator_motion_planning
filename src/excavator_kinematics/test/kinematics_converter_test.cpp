@@ -83,6 +83,7 @@ TEST(KinematicsConverterTest, ConvertsUrdfRootAndJointFrames) {
 <robot name="test">
   <link name="base"/>
   <link name="tip"/>
+  <link name="hydraulic_link"/>
   <joint name="joint1" type="revolute">
     <parent link="base"/>
     <child link="tip"/>
@@ -90,14 +91,22 @@ TEST(KinematicsConverterTest, ConvertsUrdfRootAndJointFrames) {
     <axis xyz="0 0 1"/>
     <limit lower="-1" upper="1" effort="10" velocity="0.5"/>
   </joint>
+  <joint name="hydraulic_joint" type="prismatic">
+    <parent link="base"/>
+    <child link="hydraulic_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="0" upper="1" effort="10" velocity="0.2"/>
+  </joint>
 </robot>)";
   ModelDescription description;
   const KinematicsResult converted =
-      UrdfModelConverter::FromString(urdf, &description);
+      UrdfModelConverter::FromString(urdf, &description, {"joint1"});
   ASSERT_TRUE(converted.ok()) << converted.message;
   EXPECT_EQ(description.root_link, "base");
   ASSERT_EQ(description.joint_order.size(), 1U);
   EXPECT_EQ(description.joint_order.front(), "joint1");
+  EXPECT_EQ(description.joints.size(), 2U);
   KinematicsModel model;
   const KinematicsResult initialized = model.Initialize(description);
   ASSERT_TRUE(initialized.ok()) << initialized.message;
