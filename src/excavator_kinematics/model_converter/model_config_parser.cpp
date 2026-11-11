@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <exception>
+#include <exception>
 #include <string>
 #include <unordered_set>
 
@@ -85,6 +86,7 @@ KinematicsResult ModelConfigParser::Parse(
     return KinematicsResult::Failure(KinematicsStatus::kInvalidArgument,
                                      "model YAML map and output are required");
   }
+  try {
   const YAML::Node node =
       input["kinematics_model"] ? input["kinematics_model"] : input;
   if (!node.IsMap() || !node["name"] || !node["root_link"] ||
@@ -168,6 +170,11 @@ KinematicsResult ModelConfigParser::Parse(
 
   *description = std::move(converted);
   return KinematicsResult::Success();
+  } catch (const std::exception& error) {
+    return KinematicsResult::Failure(
+        KinematicsStatus::kInvalidArgument,
+        std::string("invalid model YAML: ") + error.what());
+  }
 }
 
 }  // namespace tramcar::planning
