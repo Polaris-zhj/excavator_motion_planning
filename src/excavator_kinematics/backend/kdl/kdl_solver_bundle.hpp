@@ -8,21 +8,19 @@
 #include "excavator_kinematics/backend/kdl/kdl_model_converter.hpp"
 #include "excavator_kinematics/kinematics_types.hpp"
 #include "chainfksolverpos_recursive.hpp"
-#include "chainiksolverpos_nr_jl.hpp"
-#include "chainiksolvervel_wdls.hpp"
 #include "chainjnttojacsolver.hpp"
 
 namespace tramcar::planning {
 
 class KdlSolverBundle {
  public:
-  KdlSolverBundle(KdlChainDescription description,
-                  const KinematicsSolverConfig& config);
+  explicit KdlSolverBundle(KdlChainDescription description);
   KinematicsResult Initialize();
   int ComputeFk(const KDL::JntArray& q, KDL::Frame* frame);
   int ComputeJacobian(const KDL::JntArray& q, KDL::Jacobian* jacobian);
   int SolveIk(const KDL::JntArray& seed, const KDL::Frame& target,
-              bool enforce_limits, KDL::JntArray* solution);
+              const IkOptions& options, bool enforce_limits,
+              KDL::JntArray* solution);
   const std::vector<std::size_t>& joint_indices() const {
     return joint_indices_;
   }
@@ -37,10 +35,6 @@ class KdlSolverBundle {
   std::vector<JointLimit> joint_limits_;
   std::unique_ptr<KDL::ChainFkSolverPos_recursive> fk_solver_;
   std::unique_ptr<KDL::ChainJntToJacSolver> jacobian_solver_;
-  std::unique_ptr<KDL::ChainIkSolverVel_wdls> ik_velocity_solver_;
-  std::unique_ptr<KDL::ChainIkSolverPos_NR_JL> ik_position_limited_solver_;
-  std::unique_ptr<KDL::ChainIkSolverPos_NR_JL> ik_position_unbounded_solver_;
-  KinematicsSolverConfig config_;
   std::string last_error_message_;
 };
 
