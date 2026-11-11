@@ -1,5 +1,6 @@
+# 示例配置：用于演示四自由度模型结构，不代表实际挖机的标定尺寸/限位。
 kinematics_model:
-  name: excavator_arm
+  name: excavator_arm_example
   root_link: world
   joint_order: [swing_joint, boom_joint, stick_joint, bucket_joint]
   links:
