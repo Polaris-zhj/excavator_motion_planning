@@ -80,8 +80,9 @@ TEST(KdlKinematicsTest, ComputesRootRelativeForwardKinematics) {
 TEST(KdlKinematicsTest, ComputesJacobianInRootFrameAndModelOrder) {
   auto model = MakePlanarArm();
   ASSERT_NE(model, nullptr);
-  KdlKinematicsSolver solver;
-  ASSERT_TRUE(solver.Initialize(model).ok());
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
 
   JointVector q = JointVector::Zero(3);
   JacobianMatrix jacobian;
@@ -102,13 +103,14 @@ TEST(KdlKinematicsTest, ComputesJacobianInRootFrameAndModelOrder) {
 TEST(KdlKinematicsTest, SolvesIkAndVerifiesFk) {
   auto model = MakePlanarArm();
   ASSERT_NE(model, nullptr);
-  KdlKinematicsSolver solver;
-  ASSERT_TRUE(solver.Initialize(model).ok());
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
 
   JointVector target_q(3);
   target_q << 0.2, -0.5, 0.3;
   Pose target;
-  ASSERT_TRUE(solver.GetLinkPose(target_q, "tip", &target).ok());
+  ASSERT_TRUE(solver->GetLinkPose(target_q, "tip", &target).ok());
 
   IkRequest request;
   request.target_link = "tip";
