@@ -110,7 +110,7 @@ TEST(KdlKinematicsTest, ComputesRelativePoseBetweenLinks) {
   JointVector q = JointVector::Zero(3);
   Pose relative_pose;
   const KinematicsResult result =
-      solver->GetRelativePose(q, "link1", "tip", &relative_pose);
+      solver->GetRelativePose(q, "link2", "tip", &relative_pose);
   ASSERT_TRUE(result.ok()) << result.message;
   EXPECT_NEAR(relative_pose.position.x(), 3.5, 1.0e-9);
   EXPECT_NEAR(relative_pose.position.y(), 0.0, 1.0e-9);
