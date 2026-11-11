@@ -1,5 +1,6 @@
 #include "excavator_kinematics/kinematics_model.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <unordered_set>
