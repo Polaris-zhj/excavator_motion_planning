@@ -118,7 +118,7 @@ using namespace tramcar::planning;
 
 ModelDescription description;
 KinematicsResult parsed =
-    UrdfModelConverter::FromFile("excavator.urdf", &description);
+    UrdfModelConverter::FromFile(\n        "excavator.urdf", &description,\n        {"swing_joint", "boom_joint", "stick_joint", "bucket_joint"});
 if (!parsed.ok()) {
   // Handle parse error.
 }
