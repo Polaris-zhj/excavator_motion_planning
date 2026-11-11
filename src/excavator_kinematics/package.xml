@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>excavator_kinematics</name>
+  <version>0.1.0</version>
+  <description>Replaceable kinematics interfaces with a private Orocos KDL backend.</description>
+  <maintainer email="maintainer@example.com">Excavator Motion Planning Contributors</maintainer>
+  <license>Apache-2.0 AND LGPL-2.1-or-later</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>eigen</depend>
+  <depend>urdf</depend>
+  <depend>yaml_cpp_vendor</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
