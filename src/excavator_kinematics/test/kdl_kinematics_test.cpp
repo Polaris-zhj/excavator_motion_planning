@@ -55,6 +55,34 @@ std::shared_ptr<KinematicsModel> MakePlanarArm() {
   return model;
 }
 
+std::shared_ptr<KinematicsModel> MakeArmWithLockedJoint() {
+  ModelDescription description;
+  description.name = "arm_with_locked_joint";
+  description.root_link = "base";
+  description.links = {{"base"}, {"shoulder"}, {"elbow"}};
+
+  JointModel active;
+  active.name = "active_joint";
+  active.type = JointType::kRevolute;
+  active.parent_link = "base";
+  active.child_link = "shoulder";
+  active.axis = Eigen::Vector3d::UnitZ();
+
+  JointModel passive;
+  passive.name = "passive_joint";
+  passive.type = JointType::kRevolute;
+  passive.parent_link = "shoulder";
+  passive.child_link = "elbow";
+  passive.origin.translation = Eigen::Vector3d(2.0, 0.0, 0.0);
+  passive.axis = Eigen::Vector3d::UnitZ();
+
+  description.joints = {active, passive};
+  description.joint_order = {"active_joint"};
+  auto model = std::make_shared<KinematicsModel>();
+  if (!model->Initialize(description).ok()) return nullptr;
+  return model;
+}
+
 }  // namespace
 
 TEST(KdlKinematicsTest, ComputesRootRelativeForwardKinematics) {
@@ -75,6 +103,22 @@ TEST(KdlKinematicsTest, ComputesRootRelativeForwardKinematics) {
   const Eigen::Quaterniond expected(Eigen::AngleAxisd(
       -kPi / 18.0, Eigen::Vector3d::UnitZ()));
   EXPECT_NEAR(pose.orientation.angularDistance(expected), 0.0, 1.0e-6);
+}
+
+TEST(KdlKinematicsTest, LocksMovableJointsOmittedFromJointOrder) {
+  auto model = MakeArmWithLockedJoint();
+  ASSERT_NE(model, nullptr);
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
+
+  JointVector q(1);
+  q << 0.5;
+  Pose pose;
+  const KinematicsResult result = solver->GetLinkPose(q, "elbow", &pose);
+  ASSERT_TRUE(result.ok()) << result.message;
+  EXPECT_NEAR(pose.position.x(), 2.0 * std::cos(0.5), 1.0e-9);
+  EXPECT_NEAR(pose.position.y(), 2.0 * std::sin(0.5), 1.0e-9);
 }
 
 TEST(KdlKinematicsTest, ComputesJacobianInRootFrameAndModelOrder) {
