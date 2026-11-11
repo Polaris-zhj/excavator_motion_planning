@@ -13,7 +13,8 @@ find_package(Eigen3 REQUIRED)
 find_package(urdf REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
-# Vendored Orocos KDL 1.5.4 is a private implementation dependency.
+# Only the Orocos KDL source files needed by FK, Jacobian and NR_JL IK are
+# compiled. The full upstream source snapshot is retained under third_library.
 set(KDL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_library/KDL")
 add_library(excavator_kdl STATIC
   ${KDL_DIR}/frames.cpp
@@ -22,22 +23,14 @@ add_library(excavator_kdl STATIC
   ${KDL_DIR}/chain.cpp
   ${KDL_DIR}/jntarray.cpp
   ${KDL_DIR}/jacobian.cpp
-  ${KDL_DIR}/rotationalinertia.cpp
-  ${KDL_DIR}/rigidbodyinertia.cpp
-  ${KDL_DIR}/framevel.cpp
-  ${KDL_DIR}/frameacc.cpp
-  ${KDL_DIR}/jntarrayvel.cpp
-  ${KDL_DIR}/jntarrayacc.cpp
   ${KDL_DIR}/chainfksolverpos_recursive.cpp
   ${KDL_DIR}/chainjnttojacsolver.cpp
   ${KDL_DIR}/chainiksolvervel_wdls.cpp
   ${KDL_DIR}/chainiksolverpos_nr_jl.cpp
   ${KDL_DIR}/utilities/utility.cxx
-  ${KDL_DIR}/utilities/utility_io.cxx
   ${KDL_DIR}/utilities/error_stack.cxx
   ${KDL_DIR}/utilities/svd_eigen_HH.cpp)
-target_include_directories(excavator_kdl
-  PUBLIC ${KDL_DIR})
+target_include_directories(excavator_kdl PUBLIC ${KDL_DIR})
 target_link_libraries(excavator_kdl PUBLIC Eigen3::Eigen)
 set_target_properties(excavator_kdl PROPERTIES
   POSITION_INDEPENDENT_CODE ON
