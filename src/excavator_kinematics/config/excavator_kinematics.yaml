@@ -1,0 +1,65 @@
+kinematics_model:
+  name: excavator_arm
+  root_link: world
+  joint_order: [swing_joint, boom_joint, stick_joint, bucket_joint]
+  links:
+    - {name: world}
+    - {name: base_link}
+    - {name: swing_link}
+    - {name: boom_link}
+    - {name: stick_link}
+    - {name: bucket_link}
+    - {name: bucket_tip}
+  joints:
+    - name: world_to_base
+      type: fixed
+      parent_link: world
+      child_link: base_link
+      origin:
+        xyz: [0.0, 0.0, 0.397]
+        rpy: [0.0, 0.0, 0.0]
+      axis: [0.0, 0.0, 1.0]
+    - name: swing_joint
+      type: revolute
+      parent_link: base_link
+      child_link: swing_link
+      origin:
+        xyz: [0.0, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+      axis: [0.0, 0.0, 1.0]
+      limit: {lower: -3.14159, upper: 3.14159, velocity: 0.8}
+    - name: boom_joint
+      type: revolute
+      parent_link: swing_link
+      child_link: boom_link
+      origin:
+        xyz: [0.0, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+      axis: [0.0, 1.0, 0.0]
+      limit: {lower: -1.2, upper: 1.2, velocity: 0.5}
+    - name: stick_joint
+      type: revolute
+      parent_link: boom_link
+      child_link: stick_link
+      origin:
+        xyz: [2.0, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+      axis: [0.0, 1.0, 0.0]
+      limit: {lower: -2.0, upper: 2.0, velocity: 0.5}
+    - name: bucket_joint
+      type: revolute
+      parent_link: stick_link
+      child_link: bucket_link
+      origin:
+        xyz: [1.5, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+      axis: [0.0, 1.0, 0.0]
+      limit: {lower: -2.5, upper: 2.5, velocity: 0.8}
+    - name: bucket_tip_fixed
+      type: fixed
+      parent_link: bucket_link
+      child_link: bucket_tip
+      origin:
+        xyz: [0.8, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+      axis: [0.0, 0.0, 1.0]
