@@ -87,6 +87,8 @@ install(TARGETS excavator_kinematics EXPORT excavator_kinematicsTargets
   RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
+install(DIRECTORY third_library/KDL/
+  DESTINATION share/${PROJECT_NAME}/third_library/KDL)
 
 ament_export_targets(excavator_kinematicsTargets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
