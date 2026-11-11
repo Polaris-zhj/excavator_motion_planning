@@ -276,12 +276,23 @@ IkResult KdlKinematicsSolver::InverseKinematics(
     const IkRequest& request) const {
   IkResult output;
   std::lock_guard<std::mutex> lock(mutex_);
+  IkOptions options = request.options;
+  const IkOptions default_options;
+  if (options.max_iterations == default_options.max_iterations) {
+    options.max_iterations = config_.max_iterations;
+  }
+  if (options.position_tolerance == default_options.position_tolerance) {
+    options.position_tolerance = config_.position_tolerance;
+  }
+  if (options.orientation_tolerance == default_options.orientation_tolerance) {
+    options.orientation_tolerance = config_.orientation_tolerance;
+  }
   output.result = ValidateJointVector(request.initial_q);
   if (!output.result.ok()) return output;
   if (request.target_link.empty() || !IsFinite(request.target_pose) ||
-      request.options.max_iterations == 0 ||
-      !std::isfinite(request.options.position_tolerance) ||
-      !std::isfinite(request.options.orientation_tolerance) ||
+      options.max_iterations == 0 ||
+      !std::isfinite(options.position_tolerance) ||
+      !std::isfinite(options.orientation_tolerance) ||
       request.options.position_tolerance <= 0.0 ||
       request.options.orientation_tolerance <= 0.0) {
     output.result = KinematicsResult::Failure(
@@ -333,7 +344,7 @@ IkResult KdlKinematicsSolver::InverseKinematics(
   const KDL::Frame target = KdlTypeConverter::ToKdlFrame(request.target_pose);
   KDL::JntArray solution(seed.rows());
   const int code = bundle->SolveIk(seed, target, request.options,
-                                   request.options.enforce_joint_limits,
+                                   options.enforce_joint_limits,
                                    &solution);
   if (code != KDL::SolverI::E_NOERROR) {
     output.result = KinematicsResult::Failure(
@@ -351,6 +362,20 @@ IkResult KdlKinematicsSolver::InverseKinematics(
         KinematicsStatus::kBackendFailure,
         "failed to map KDL IK solution to project joint order");
     return output;
+  }
+
+  if (options.enforce_joint_limits) {
+    for (std::size_t i = 0; i < bundle->joint_indices().size(); ++i) {
+      const JointLimit& limit = bundle->joint_limits()[i];
+      const double value = solution(static_cast<unsigned int>(i));
+      if (limit.has_position_limits &&
+          (value < limit.lower - 1.0e-9 || value > limit.upper + 1.0e-9)) {
+        output.result = KinematicsResult::Failure(
+            KinematicsStatus::kJointLimitViolation,
+            "IK solution violates a joint position limit");
+        return output;
+      }
+    }
   }
 
   Pose achieved_pose;
