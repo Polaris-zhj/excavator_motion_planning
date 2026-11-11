@@ -59,9 +59,9 @@ TEST(KinematicsModelTest, RejectsDisconnectedTopology) {
   EXPECT_EQ(result.status, KinematicsStatus::kInvalidArgument);
 }
 
-TEST(KinematicsModelTest, RejectsIncompleteJointOrder) {
+TEST(KinematicsModelTest, RejectsUnknownJointInOrder) {
   ModelDescription description = MakeModel();
-  description.joint_order = {"joint1"};
+  description.joint_order = {"joint1", "missing_joint"};
   KinematicsModel model;
   const KinematicsResult result = model.Initialize(description);
   EXPECT_FALSE(result.ok());
