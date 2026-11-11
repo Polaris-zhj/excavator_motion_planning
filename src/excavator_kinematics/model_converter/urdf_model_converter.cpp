@@ -1,5 +1,6 @@
 #include "excavator_kinematics/model_converter/urdf_model_converter.hpp"
 
+#include <algorithm>
 #include <functional>
 #include <unordered_set>
 #include <utility>
@@ -24,8 +25,9 @@ Eigen::Vector3d ToVector(const urdf::Vector3& vector) {
   return Eigen::Vector3d(vector.x, vector.y, vector.z);
 }
 
-KinematicsResult ConvertModel(const urdf::Model& urdf_model,
-                              ModelDescription* description) {
+KinematicsResult ConvertModel(
+    const urdf::Model& urdf_model, ModelDescription* description,
+    const std::vector<std::string>& active_joint_order) {
   if (description == nullptr) {
     return KinematicsResult::Failure(KinematicsStatus::kInvalidArgument,
                                      "output description is null");
@@ -97,10 +99,6 @@ KinematicsResult ConvertModel(const urdf::Model& urdf_model,
         }
       }
       converted.joints.push_back(joint);
-      if (joint.type != JointType::kFixed) {
-        converted.joint_order.push_back(joint.name);
-      }
-
       const urdf::LinkConstSharedPtr child =
           urdf_model.getLink(urdf_joint->child_link_name);
       KinematicsResult result = visit(child);
@@ -111,6 +109,30 @@ KinematicsResult ConvertModel(const urdf::Model& urdf_model,
 
   KinematicsResult result = visit(root);
   if (!result.ok()) return result;
+
+  if (active_joint_order.empty()) {
+    for (const JointModel& joint : converted.joints) {
+      if (joint.type != JointType::kFixed) {
+        converted.joint_order.push_back(joint.name);
+      }
+    }
+  } else {
+    std::unordered_set<std::string> selected;
+    for (const std::string& joint_name : active_joint_order) {
+      const auto found = std::find_if(
+          converted.joints.begin(), converted.joints.end(),
+          [&](const JointModel& joint) { return joint.name == joint_name; });
+      if (found == converted.joints.end() ||
+          found->type == JointType::kFixed ||
+          !selected.insert(joint_name).second) {
+        return KinematicsResult::Failure(
+            KinematicsStatus::kInvalidArgument,
+            "active_joint_order contains an unknown, fixed or duplicate Joint: " +
+                joint_name);
+      }
+      converted.joint_order.push_back(joint_name);
+    }
+  }
   *description = std::move(converted);
   return KinematicsResult::Success();
 }
@@ -118,7 +140,8 @@ KinematicsResult ConvertModel(const urdf::Model& urdf_model,
 }  // namespace
 
 KinematicsResult UrdfModelConverter::FromFile(
-    const std::string& path, ModelDescription* description) {
+    const std::string& path, ModelDescription* description,
+    const std::vector<std::string>& active_joint_order) {
   if (path.empty() || description == nullptr) {
     return KinematicsResult::Failure(KinematicsStatus::kInvalidArgument,
                                      "URDF path and output are required");
@@ -129,11 +152,12 @@ KinematicsResult UrdfModelConverter::FromFile(
         KinematicsStatus::kInvalidArgument,
         "failed to parse URDF file: " + path);
   }
-  return ConvertModel(model, description);
+  return ConvertModel(model, description, active_joint_order);
 }
 
 KinematicsResult UrdfModelConverter::FromString(
-    const std::string& xml, ModelDescription* description) {
+    const std::string& xml, ModelDescription* description,
+    const std::vector<std::string>& active_joint_order) {
   if (xml.empty() || description == nullptr) {
     return KinematicsResult::Failure(KinematicsStatus::kInvalidArgument,
                                      "URDF XML and output are required");
@@ -143,7 +167,7 @@ KinematicsResult UrdfModelConverter::FromString(
     return KinematicsResult::Failure(KinematicsStatus::kInvalidArgument,
                                      "failed to parse URDF XML string");
   }
-  return ConvertModel(model, description);
+  return ConvertModel(model, description, active_joint_order);
 }
 
 }  // namespace tramcar::planning
