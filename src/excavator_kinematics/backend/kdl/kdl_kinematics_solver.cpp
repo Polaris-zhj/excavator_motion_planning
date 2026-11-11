@@ -341,6 +341,20 @@ IkResult KdlKinematicsSolver::InverseKinematics(
         "failed to map IK seed to KDL Chain order");
     return output;
   }
+  if (options.enforce_joint_limits) {
+    for (std::size_t i = 0; i < bundle->joint_indices().size(); ++i) {
+      const JointLimit& limit = bundle->joint_limits()[i];
+      const double value = seed(static_cast<unsigned int>(i));
+      if (limit.has_position_limits &&
+          (value < limit.lower || value > limit.upper)) {
+        output.result = KinematicsResult::Failure(
+            KinematicsStatus::kJointLimitViolation,
+            "IK initial configuration violates a joint position limit");
+        return output;
+      }
+    }
+  }
+
   const KDL::Frame target = KdlTypeConverter::ToKdlFrame(request.target_pose);
   KDL::JntArray solution(seed.rows());
   const int code = bundle->SolveIk(seed, target, options,
