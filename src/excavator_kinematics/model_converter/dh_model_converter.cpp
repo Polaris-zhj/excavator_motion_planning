@@ -78,6 +78,7 @@ KinematicsResult DhModelConverter::FromYaml(
     return KinematicsResult::Failure(KinematicsStatus::kInvalidArgument,
                                      "DH YAML and output are required");
   }
+  try {
   const std::string convention =
       node["convention"] ? node["convention"].as<std::string>() : "";
   if (convention != "modified_dh") {
@@ -215,6 +216,11 @@ KinematicsResult DhModelConverter::FromYaml(
 
   *description = std::move(converted);
   return KinematicsResult::Success();
+  } catch (const std::exception& error) {
+    return KinematicsResult::Failure(
+        KinematicsStatus::kInvalidArgument,
+        std::string("invalid Modified DH YAML: ") + error.what());
+  }
 }
 
 }  // namespace tramcar::planning
