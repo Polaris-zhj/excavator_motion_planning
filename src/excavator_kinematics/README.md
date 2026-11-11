@@ -45,7 +45,7 @@ T_reference_target = inverse(T_root_reference) * T_root_target
 
 ### URDF
 
-UrdfModelConverter::FromFile / FromString 读取 URDF，转换 Link 树、fixed / revolute / continuous / prismatic Joint、origin、axis 和限位。不支持的关节类型会返回错误。默认情况下，URDF 中所有非固定关节按树遍历顺序构成活动关节顺序。也可以向 FromFile / FromString 传入 active_joint_order，只选择独立规划关节；其余可动关节保留在拓扑中并锁定在 q = 0，适用于当前阶段暂不建模的液压缸或被动连杆自由度。
+UrdfModelConverter::FromFile / FromString 读取 URDF，转换 Link 树、fixed / revolute / continuous / prismatic Joint、origin、axis 和限位。不支持的关节类型会返回错误。默认情况下，URDF 中所有非固定关节按树遍历顺序构成活动关节顺序。也可以向 FromFile / FromString 传入 active_joint_order，只选择独立规划关节；其余可动关节保留在拓扑中并锁定在 q = 0，适用于当前阶段暂不建模的液压缸或被动连杆自由度。挖机模型可以显式选择 swing_joint、boom_joint、stick_joint、bucket_joint 作为活动关节，避免将液压缸/连杆关节混入规划向量。
 
 ### 自定义 YAML
 
