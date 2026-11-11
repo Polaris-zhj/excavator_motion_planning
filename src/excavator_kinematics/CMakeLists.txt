@@ -23,6 +23,8 @@ add_library(excavator_kdl STATIC
   ${KDL_DIR}/chain.cpp
   ${KDL_DIR}/jntarray.cpp
   ${KDL_DIR}/jacobian.cpp
+  ${KDL_DIR}/rotationalinertia.cpp
+  ${KDL_DIR}/rigidbodyinertia.cpp
   ${KDL_DIR}/chainfksolverpos_recursive.cpp
   ${KDL_DIR}/chainjnttojacsolver.cpp
   ${KDL_DIR}/chainiksolvervel_wdls.cpp
