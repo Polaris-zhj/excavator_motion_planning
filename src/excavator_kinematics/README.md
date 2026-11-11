@@ -165,4 +165,4 @@ colcon test-result --verbose
 
 third_library/KDL 的源码来自 orocos/orocos_kinematics_dynamics，版本标签 1.5.4，上游 commit 84b086838dea2b1132064517a61017d30945f1d3。保留上游文件版权声明和 third_library/KDL/COPYING。Orocos KDL 使用 LGPL-2.1-or-later；再分发时需遵守对应许可义务。
 
-本包将所需 KDL 源文件编译为私有静态目标，再链接进 excavator_kinematics 共享库。调用方只包含本包公共头文件，不需要包含 KDL 头文件，也不需要在公共 API 中处理 KDL 类型。
+本包将所需 KDL 源文件编译为单独的 excavator_kdl 共享库，再由 excavator_kinematics 私有链接。这样保留 KDL 的可替换动态链接边界，便于遵循 LGPL 的再链接要求。调用方只包含本包公共头文件，不需要包含 KDL 头文件，也不需要在公共 API 中处理 KDL 类型。
