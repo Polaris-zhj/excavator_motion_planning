@@ -80,23 +80,23 @@ KinematicsResult KdlModelConverter::BuildChain(
 
   KdlChainDescription converted;
   for (const JointModel* joint : reversed_path) {
-    const KDL::Joint kdl_joint = ToKdlJoint(*joint);
+    std::size_t active_index = 0;
+    const bool is_active =
+        joint->type != JointType::kFixed &&
+        model.GetActiveJointIndex(joint->name, &active_index);
+    const KDL::Joint kdl_joint =
+        is_active ? ToKdlJoint(*joint)
+                  : KDL::Joint(joint->name, KDL::Joint::Fixed);
     KDL::Frame frame_to_tip = ToKdlFrame(joint->origin);
-    if (joint->type != JointType::kFixed) {
+    if (is_active) {
       // KDL::Joint::pose(q) already applies the joint-origin translation.
       // Only the fixed origin rotation belongs in Segment::f_tip here.
       frame_to_tip.p = KDL::Vector::Zero();
     }
     converted.chain.addSegment(
         KDL::Segment(joint->child_link, kdl_joint, frame_to_tip));
-    if (joint->type != JointType::kFixed) {
-      std::size_t index = 0;
-      if (!model.GetActiveJointIndex(joint->name, &index)) {
-        return KinematicsResult::Failure(
-            KinematicsStatus::kInvalidArgument,
-            "active Joint is missing from joint_order: " + joint->name);
-      }
-      converted.joint_indices.push_back(index);
+    if (is_active) {
+      converted.joint_indices.push_back(active_index);
       converted.joint_limits.push_back(joint->limit);
     }
   }
