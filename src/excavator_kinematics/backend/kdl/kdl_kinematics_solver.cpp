@@ -306,6 +306,20 @@ IkResult KdlKinematicsSolver::InverseKinematics(
         "unknown IK target Link: " + request.target_link);
     return output;
   }
+  if (options.enforce_joint_limits) {
+    const auto& joint_names = model_->GetActiveJointNames();
+    for (std::size_t i = 0; i < joint_names.size(); ++i) {
+      const JointModel* joint = model_->GetJoint(joint_names[i]);
+      const double value = request.initial_q(static_cast<Eigen::Index>(i));
+      if (joint != nullptr && joint->limit.has_position_limits &&
+          (value < joint->limit.lower || value > joint->limit.upper)) {
+        output.result = KinematicsResult::Failure(
+            KinematicsStatus::kJointLimitViolation,
+            "IK initial configuration violates a joint position limit");
+        return output;
+      }
+    }
+  }
   if (request.target_link == model_->root_link()) {
     const double position_error = request.target_pose.position.norm();
     const double orientation_error = OrientationError(
@@ -341,20 +355,6 @@ IkResult KdlKinematicsSolver::InverseKinematics(
         "failed to map IK seed to KDL Chain order");
     return output;
   }
-  if (options.enforce_joint_limits) {
-    for (std::size_t i = 0; i < bundle->joint_indices().size(); ++i) {
-      const JointLimit& limit = bundle->joint_limits()[i];
-      const double value = seed(static_cast<unsigned int>(i));
-      if (limit.has_position_limits &&
-          (value < limit.lower || value > limit.upper)) {
-        output.result = KinematicsResult::Failure(
-            KinematicsStatus::kJointLimitViolation,
-            "IK initial configuration violates a joint position limit");
-        return output;
-      }
-    }
-  }
-
   const KDL::Frame target = KdlTypeConverter::ToKdlFrame(request.target_pose);
   KDL::JntArray solution(seed.rows());
   const int code = bundle->SolveIk(seed, target, options,
@@ -379,11 +379,13 @@ IkResult KdlKinematicsSolver::InverseKinematics(
   }
 
   if (options.enforce_joint_limits) {
-    for (std::size_t i = 0; i < bundle->joint_indices().size(); ++i) {
-      const JointLimit& limit = bundle->joint_limits()[i];
-      const double value = solution(static_cast<unsigned int>(i));
-      if (limit.has_position_limits &&
-          (value < limit.lower - 1.0e-9 || value > limit.upper + 1.0e-9)) {
+    const auto& joint_names = model_->GetActiveJointNames();
+    for (std::size_t i = 0; i < joint_names.size(); ++i) {
+      const JointModel* joint = model_->GetJoint(joint_names[i]);
+      const double value = output.solution(static_cast<Eigen::Index>(i));
+      if (joint != nullptr && joint->limit.has_position_limits &&
+          (value < joint->limit.lower - 1.0e-9 ||
+           value > joint->limit.upper + 1.0e-9)) {
         output.result = KinematicsResult::Failure(
             KinematicsStatus::kJointLimitViolation,
             "IK solution violates a joint position limit");
