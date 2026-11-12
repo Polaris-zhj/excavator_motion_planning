@@ -8,8 +8,9 @@
 #include <vector>
 
 #include "excavator_kinematics/backend/kdl/kdl_model_converter.hpp"
-#include "excavator_kinematics/backend/kdl/kdl_solver_bundle.hpp"
 #include "excavator_kinematics/kinematics_solver.hpp"
+#include "chainfksolverpos_recursive.hpp"
+#include "chainjnttojacsolver.hpp"
 
 namespace excavator {
 namespace planning {
@@ -18,6 +19,7 @@ class KdlKinematicsSolver final : public KinematicsSolver {
  public:
   explicit KdlKinematicsSolver(KinematicsSolverConfig config = {});
   ~KdlKinematicsSolver() override = default;
+
   KinematicsResult Initialize(
       std::shared_ptr<const KinematicsModel> model) override;
   KinematicsResult GetLinkPose(const JointVector& q,
@@ -37,21 +39,25 @@ class KdlKinematicsSolver final : public KinematicsSolver {
 
  private:
   KinematicsResult ValidateJointVector(const JointVector& q) const;
-  KinematicsResult GetOrCreateBundleLocked(const std::string& base_link,
-                                           const std::string& tip_link,
-                                           KdlSolverBundle** bundle) const;
   KinematicsResult GetLinkPoseLocked(const JointVector& q,
                                      const std::string& link_name,
                                      Pose* pose) const;
-  std::string MakeCacheKey(const std::string& base_link,
-                           const std::string& tip_link) const;
+  KinematicsResult MapJointVector(const JointVector& q,
+                                  KDL::JntArray* q_kdl) const;
+  bool GetSegmentIndex(const std::string& link_name,
+                       unsigned int* segment_index) const;
 
   KinematicsSolverConfig config_;
   std::shared_ptr<const KinematicsModel> model_;
   KdlModelConverter model_converter_;
+  KDL::Chain chain_;
+  std::vector<std::size_t> joint_indices_;
+  std::vector<JointLimit> joint_limits_;
+  std::unordered_map<std::string, unsigned int> link_segment_indices_;
+  std::unique_ptr<KDL::ChainFkSolverPos_recursive> fk_solver_;
+  std::unique_ptr<KDL::ChainJntToJacSolver> jacobian_solver_;
   mutable std::mutex mutex_;
-  mutable std::unordered_map<std::string, std::unique_ptr<KdlSolverBundle>>
-      bundles_;
+  mutable std::string last_error_message_;
 };
 
 }  // namespace planning
