@@ -220,8 +220,8 @@ TEST(KdlKinematicsTest, ComputesIntermediateLinkJacobian) {
       solver->GetJacobian(q, "link2", &jacobian);
   ASSERT_TRUE(result.ok()) << result.message;
   ASSERT_EQ(jacobian.cols(), 3);
-  EXPECT_NEAR(jacobian(1, 0), 5.5, 1.0e-9);
-  EXPECT_NEAR(jacobian(1, 1), 2.5, 1.0e-9);
+  EXPECT_NEAR(jacobian(1, 0), 3.0, 1.0e-9);
+  EXPECT_NEAR(jacobian(1, 1), 0.0, 1.0e-9);
   EXPECT_NEAR(jacobian(1, 2), 0.0, 1.0e-9);
   EXPECT_NEAR(jacobian(5, 0), 1.0, 1.0e-9);
   EXPECT_NEAR(jacobian(5, 1), 1.0, 1.0e-9);
