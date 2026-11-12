@@ -7,7 +7,8 @@
 #include "chainiksolverpos_nr_jl.hpp"
 #include "chainiksolvervel_wdls.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 KdlSolverBundle::KdlSolverBundle(KdlChainDescription description)
     : chain_(std::move(description.chain)),
@@ -91,4 +92,5 @@ int KdlSolverBundle::SolveIk(const KDL::JntArray& seed,
   return code;
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

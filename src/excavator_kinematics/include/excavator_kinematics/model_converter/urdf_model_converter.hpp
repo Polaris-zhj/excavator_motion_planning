@@ -6,7 +6,8 @@
 
 #include "excavator_kinematics/kinematics_types.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class UrdfModelConverter {
  public:
@@ -21,6 +22,7 @@ class UrdfModelConverter {
       const std::vector<std::string>& active_joint_order = {});
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__URDF_MODEL_CONVERTER_HPP_

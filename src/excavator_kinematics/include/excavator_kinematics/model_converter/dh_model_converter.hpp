@@ -7,7 +7,8 @@
 
 #include "excavator_kinematics/kinematics_types.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class DhModelConverter {
  public:
@@ -17,6 +18,7 @@ class DhModelConverter {
                                    ModelDescription* description);
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__DH_MODEL_CONVERTER_HPP_

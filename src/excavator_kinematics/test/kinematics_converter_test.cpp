@@ -7,7 +7,8 @@
 #include "excavator_kinematics/model_converter/model_config_parser.hpp"
 #include "excavator_kinematics/model_converter/urdf_model_converter.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 TEST(KinematicsConverterTest, ParsesCustomModelYaml) {
   const YAML::Node yaml = YAML::Load(R"(
@@ -112,4 +113,5 @@ TEST(KinematicsConverterTest, ConvertsUrdfRootAndJointFrames) {
   ASSERT_TRUE(initialized.ok()) << initialized.message;
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

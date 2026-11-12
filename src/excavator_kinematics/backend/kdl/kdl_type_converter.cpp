@@ -1,6 +1,7 @@
 #include "excavator_kinematics/backend/kdl/kdl_type_converter.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 KDL::Frame KdlTypeConverter::ToKdlFrame(const Pose& pose) {
   const Eigen::Quaterniond orientation = pose.orientation.normalized();
@@ -54,4 +55,5 @@ JacobianMatrix KdlTypeConverter::FromKdlJacobian(
   return jacobian.data;
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

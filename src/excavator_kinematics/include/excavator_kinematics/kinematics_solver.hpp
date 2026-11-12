@@ -7,7 +7,8 @@
 
 #include "excavator_kinematics/kinematics_model.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class KinematicsSolver {
  public:
@@ -27,9 +28,10 @@ class KinematicsSolver {
       std::vector<Pose>* poses) const = 0;
 
   // Pose of target_link expressed in reference_link coordinates.
-  virtual KinematicsResult GetRelativePose(
-      const JointVector& q, const std::string& reference_link,
-      const std::string& target_link, Pose* pose) const = 0;
+  virtual KinematicsResult GetRelativePose(const JointVector& q,
+                                           const std::string& reference_link,
+                                           const std::string& target_link,
+                                           Pose* pose) const = 0;
 
   // 6xN geometric Jacobian expressed in root_link coordinates.
   virtual KinematicsResult GetJacobian(const JointVector& q,
@@ -39,6 +41,7 @@ class KinematicsSolver {
   virtual IkResult InverseKinematics(const IkRequest& request) const = 0;
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KINEMATICS_SOLVER_HPP_

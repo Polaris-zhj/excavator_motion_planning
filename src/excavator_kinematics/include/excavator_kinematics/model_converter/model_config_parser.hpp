@@ -7,7 +7,8 @@
 
 #include "excavator_kinematics/kinematics_types.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class ModelConfigParser {
  public:
@@ -17,6 +18,7 @@ class ModelConfigParser {
                                 ModelDescription* description);
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__MODEL_CONFIG_PARSER_HPP_

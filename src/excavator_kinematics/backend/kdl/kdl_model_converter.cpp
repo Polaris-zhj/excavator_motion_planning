@@ -7,7 +7,8 @@
 #include "joint.hpp"
 #include "segment.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 KDL::Frame ToKdlFrame(const Transform& transform) {
@@ -106,4 +107,5 @@ KinematicsResult KdlModelConverter::BuildChain(
   return KinematicsResult::Success();
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

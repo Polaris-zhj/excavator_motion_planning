@@ -11,7 +11,8 @@
 
 #include "excavator_kinematics/backend/kdl/kdl_type_converter.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 bool IsFinite(const JointVector& q) {
@@ -413,4 +414,5 @@ IkResult KdlKinematicsSolver::InverseKinematics(
   return output;
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

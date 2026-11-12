@@ -8,7 +8,8 @@
 #include "excavator_kinematics/kinematics_model.hpp"
 #include "chain.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 struct KdlChainDescription {
   KDL::Chain chain;
@@ -24,6 +25,7 @@ class KdlModelConverter {
                               KdlChainDescription* description) const;
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KDL_MODEL_CONVERTER_HPP_

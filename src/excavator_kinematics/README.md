@@ -114,7 +114,7 @@ IK 根据每个请求的 IkOptions 创建位置/速度求解器，并可选择�
 #include "excavator_kinematics/kinematics_solver_factory.hpp"
 #include "excavator_kinematics/model_converter/urdf_model_converter.hpp"
 
-using namespace tramcar::planning;
+using namespace excavator::planning;
 
 ModelDescription description;
 KinematicsResult parsed =

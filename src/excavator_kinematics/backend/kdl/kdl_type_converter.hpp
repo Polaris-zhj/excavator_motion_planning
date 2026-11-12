@@ -9,7 +9,8 @@
 #include "jacobian.hpp"
 #include "jntarray.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class KdlTypeConverter {
  public:
@@ -24,6 +25,7 @@ class KdlTypeConverter {
   static JacobianMatrix FromKdlJacobian(const KDL::Jacobian& jacobian);
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KDL_TYPE_CONVERTER_HPP_

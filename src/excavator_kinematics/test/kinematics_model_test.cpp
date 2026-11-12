@@ -2,7 +2,8 @@
 
 #include "excavator_kinematics/kinematics_model.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 ModelDescription MakeModel() {
@@ -67,4 +68,5 @@ TEST(KinematicsModelTest, RejectsUnknownJointInOrder) {
   EXPECT_FALSE(result.ok());
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

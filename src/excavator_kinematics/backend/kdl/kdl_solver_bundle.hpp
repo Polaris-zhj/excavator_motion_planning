@@ -10,7 +10,8 @@
 #include "chainfksolverpos_recursive.hpp"
 #include "chainjnttojacsolver.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class KdlSolverBundle {
  public:
@@ -38,6 +39,7 @@ class KdlSolverBundle {
   std::string last_error_message_;
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KDL_SOLVER_BUNDLE_HPP_

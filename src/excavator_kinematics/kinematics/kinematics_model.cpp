@@ -6,7 +6,8 @@
 #include <unordered_set>
 #include <utility>
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 bool IsFinite(const Transform& transform) {
@@ -179,4 +180,5 @@ bool KinematicsModel::GetActiveJointIndex(const std::string& joint_name,
   return true;
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

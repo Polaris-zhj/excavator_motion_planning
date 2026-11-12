@@ -10,7 +10,8 @@
 
 #include "excavator_kinematics/kinematics_solver.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class KinematicsSolverFactory {
  public:
@@ -29,6 +30,7 @@ class KinematicsSolverFactory {
   std::unordered_map<std::string, Creator> creators_;
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KINEMATICS_SOLVER_FACTORY_HPP_

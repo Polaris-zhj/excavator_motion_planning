@@ -7,7 +7,8 @@
 
 #include <Eigen/Geometry>
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 KinematicsResult ReadVector3(const YAML::Node& node,
@@ -223,4 +224,5 @@ KinematicsResult DhModelConverter::FromYaml(
   }
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

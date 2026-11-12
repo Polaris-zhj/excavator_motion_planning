@@ -6,7 +6,8 @@
 #include <string>
 #include <unordered_set>
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 KinematicsResult ReadVector3(const YAML::Node& node,
@@ -177,4 +178,5 @@ KinematicsResult ModelConfigParser::Parse(
   }
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

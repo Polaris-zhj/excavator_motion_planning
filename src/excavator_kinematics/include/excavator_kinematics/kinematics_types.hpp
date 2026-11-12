@@ -9,7 +9,8 @@
 #include <utility>
 #include <vector>
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 enum class KinematicsStatus {
   kSuccess = 0,
@@ -111,6 +112,7 @@ struct KinematicsSolverConfig {
   double orientation_tolerance{1.0e-4};
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KINEMATICS_TYPES_HPP_

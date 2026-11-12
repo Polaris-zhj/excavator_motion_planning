@@ -8,7 +8,8 @@
 
 #include "excavator_kinematics/kinematics_types.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class KinematicsModel {
  public:
@@ -39,6 +40,7 @@ class KinematicsModel {
   std::unordered_map<std::string, std::size_t> active_joint_indices_;
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KINEMATICS_MODEL_HPP_

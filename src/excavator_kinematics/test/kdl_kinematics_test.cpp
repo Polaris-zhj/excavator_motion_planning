@@ -5,7 +5,8 @@
 
 #include "excavator_kinematics/kinematics_solver_factory.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
@@ -194,4 +195,5 @@ TEST(KdlKinematicsTest, FactoryCreatesKdlBackend) {
   EXPECT_FALSE(KinematicsSolverFactory::Instance().AvailableBackends().empty());
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

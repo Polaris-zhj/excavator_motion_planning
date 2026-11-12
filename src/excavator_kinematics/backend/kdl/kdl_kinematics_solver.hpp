@@ -7,11 +7,12 @@
 #include <unordered_map>
 #include <vector>
 
-#include "excavator_kinematics/kinematics_solver.hpp"
 #include "excavator_kinematics/backend/kdl/kdl_model_converter.hpp"
 #include "excavator_kinematics/backend/kdl/kdl_solver_bundle.hpp"
+#include "excavator_kinematics/kinematics_solver.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 class KdlKinematicsSolver final : public KinematicsSolver {
  public:
@@ -22,12 +23,13 @@ class KdlKinematicsSolver final : public KinematicsSolver {
   KinematicsResult GetLinkPose(const JointVector& q,
                                const std::string& link_name,
                                Pose* pose) const override;
-  KinematicsResult GetLinkPoses(
-      const JointVector& q, const std::vector<std::string>& link_names,
-      std::vector<Pose>* poses) const override;
-  KinematicsResult GetRelativePose(
-      const JointVector& q, const std::string& reference_link,
-      const std::string& target_link, Pose* pose) const override;
+  KinematicsResult GetLinkPoses(const JointVector& q,
+                                const std::vector<std::string>& link_names,
+                                std::vector<Pose>* poses) const override;
+  KinematicsResult GetRelativePose(const JointVector& q,
+                                   const std::string& reference_link,
+                                   const std::string& target_link,
+                                   Pose* pose) const override;
   KinematicsResult GetJacobian(const JointVector& q,
                                const std::string& link_name,
                                JacobianMatrix* jacobian) const override;
@@ -35,9 +37,9 @@ class KdlKinematicsSolver final : public KinematicsSolver {
 
  private:
   KinematicsResult ValidateJointVector(const JointVector& q) const;
-  KinematicsResult GetOrCreateBundleLocked(
-      const std::string& base_link, const std::string& tip_link,
-      KdlSolverBundle** bundle) const;
+  KinematicsResult GetOrCreateBundleLocked(const std::string& base_link,
+                                           const std::string& tip_link,
+                                           KdlSolverBundle** bundle) const;
   KinematicsResult GetLinkPoseLocked(const JointVector& q,
                                      const std::string& link_name,
                                      Pose* pose) const;
@@ -52,6 +54,7 @@ class KdlKinematicsSolver final : public KinematicsSolver {
       bundles_;
 };
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
 
 #endif  // EXCAVATOR_KINEMATICS__KDL_KINEMATICS_SOLVER_HPP_

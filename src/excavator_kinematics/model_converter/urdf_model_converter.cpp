@@ -7,7 +7,8 @@
 
 #include <urdf/model.h>
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 namespace {
 
 Transform ToTransform(const urdf::Pose& pose) {
@@ -170,4 +171,5 @@ KinematicsResult UrdfModelConverter::FromString(
   return ConvertModel(model, description, active_joint_order);
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator

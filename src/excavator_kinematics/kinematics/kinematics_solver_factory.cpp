@@ -5,7 +5,8 @@
 
 #include "excavator_kinematics/backend/kdl/kdl_kinematics_solver.hpp"
 
-namespace tramcar::planning {
+namespace excavator {
+namespace planning {
 
 KinematicsSolverFactory& KinematicsSolverFactory::Instance() {
   static KinematicsSolverFactory factory;
@@ -44,4 +45,5 @@ std::vector<std::string> KinematicsSolverFactory::AvailableBackends() const {
   return backends;
 }
 
-}  // namespace tramcar::planning
+}  // namespace planning
+}  // namespace excavator
