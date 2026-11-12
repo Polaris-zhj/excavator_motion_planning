@@ -21,6 +21,8 @@ class KinematicsModel {
   const std::vector<std::string>& GetActiveJointNames() const {
     return joint_order_;
   }
+  const std::vector<LinkModel>& GetLinks() const { return links_; }
+  const std::vector<JointModel>& GetJoints() const { return joints_; }
   const LinkModel* GetLink(const std::string& name) const;
   const JointModel* GetJoint(const std::string& name) const;
   const JointModel* GetParentJoint(const std::string& child_link) const;
