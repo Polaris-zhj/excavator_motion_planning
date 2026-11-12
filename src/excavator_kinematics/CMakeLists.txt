@@ -48,7 +48,6 @@ add_library(excavator_kinematics SHARED
   model_converter/dh_model_converter.cpp
   backend/kdl/kdl_model_converter.cpp
   backend/kdl/kdl_type_converter.cpp
-  backend/kdl/kdl_solver_bundle.cpp
   backend/kdl/kdl_kinematics_solver.cpp)
 
 target_include_directories(excavator_kinematics
