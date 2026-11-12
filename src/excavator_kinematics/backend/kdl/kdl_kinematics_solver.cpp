@@ -80,19 +80,20 @@ KinematicsResult KdlKinematicsSolver::Initialize(
       model_converter_.BuildFullChain(*model, &description);
   if (!result.ok()) return result;
 
-  auto fk_solver =
-      std::make_unique<KDL::ChainFkSolverPos_recursive>(description.chain);
-  auto jacobian_solver =
-      std::make_unique<KDL::ChainJntToJacSolver>(description.chain);
-
   std::lock_guard<std::mutex> lock(mutex_);
+  // KDL solvers keep references to their Chain, so the member Chain must be
+  // fully assigned before constructing either solver.
+  fk_solver_.reset();
+  jacobian_solver_.reset();
   model_ = std::move(model);
   chain_ = std::move(description.chain);
   joint_indices_ = std::move(description.joint_indices);
   joint_limits_ = std::move(description.joint_limits);
   link_segment_indices_ = std::move(description.link_segment_indices);
-  fk_solver_ = std::move(fk_solver);
-  jacobian_solver_ = std::move(jacobian_solver);
+  fk_solver_ =
+      std::make_unique<KDL::ChainFkSolverPos_recursive>(chain_);
+  jacobian_solver_ =
+      std::make_unique<KDL::ChainJntToJacSolver>(chain_);
   last_error_message_.clear();
   return KinematicsResult::Success();
 }
