@@ -101,11 +101,11 @@ T(i-1,i) = TransX(a_prev) * RotX(alpha_prev)
 - IK 速度求解：KDL::ChainIkSolverVel_wdls
 - IK 位置求解：KDL::ChainIkSolverPos_NR_JL
 
-KdlModelConverter 从统一 KinematicsModel 提取 base-tip 祖先链，生成 KDL Chain，并记录 KDL 关节列到项目 joint_order 的索引映射和关节限位。
+KdlModelConverter 在初始化时从 root_link 遍历模型树，选择一条包含全部 active joints 的最长 root-to-leaf 主链，构建唯一的完整 KDL Chain，并建立 Link 名称到 segment 索引的映射。若活动关节分布在不同分支，或存在长度相同且都包含全部活动关节的候选主链，则返回 kUnsupported；不在选定主链上的分支 Link 也会在查询时明确返回 kUnsupported。该限制是单 Chain 后端的边界，不会把分支 Link 错误地当作主链 Link。
 
-KDL Joint 的 axis 使用 Joint origin 旋转后的方向，并在 Parent Link 坐标系表达。可动关节的 origin 平移由 KDL::Joint::pose(q) 处理，因此 Segment 固定变换只保留 origin 旋转；fixed Joint 的 Segment 固定变换保留完整 origin。这样避免重复应用可动关节 origin 平移。
+KDL Joint 的 axis 使用 Joint origin 旋转后的方向，并在 Parent Link 坐标系表达。Segment 接收 Parent-Link 到 Child-Link 的完整零位变换；KDL::Segment 会处理 Joint 零位运动变换的分解，避免重复应用 origin 平移。
 
-IK 根据每个请求的 IkOptions 创建位置/速度求解器，并可选择是否启用关节位置限位。求解成功后会再次调用 FK，校验末端位置和姿态误差。KdlSolverBundle 持有 Chain 和 FK/Jacobian solver，保证引用对象的生命周期有效。Backend 对 solver 调用加锁，避免并发请求同时访问非线程安全的 KDL 实例。
+KdlKinematicsSolver 自身持有完整 Chain、FK/Jacobian solver、关节索引/限位映射和 Link-segment 映射，不再使用独立的 KdlSolverBundle。FK 使用 JntToCart(q, frame, segmentNr)，Jacobian 使用 JntToJac(q, jacobian, segmentNr)，因此可在同一完整 Chain 上查询任意主链 Link。相对位姿由两个 root-relative FK 结果组合得到。IK 根据目标 Link 的 segment 截取前缀 Chain，并为该次请求创建 NR_JL 求解器；这样中间 Link IK 只使用到该 Link 为止的活动关节。求解成功后会再次调用完整 Chain FK，校验目标 Link 的位置和姿态误差。Backend 对 solver 调用加锁，避免并发请求同时访问非线程安全的 KDL 实例。
 
 ## 6. 使用方式
 
