@@ -188,6 +188,104 @@ TEST(KdlKinematicsTest, SolvesIkAndVerifiesFk) {
   EXPECT_NEAR(result.orientation_error, 0.0, 1.0e-6);
 }
 
+
+TEST(KdlKinematicsTest, ComputesMultipleLinkPosesFromSingleChain) {
+  auto model = MakePlanarArm();
+  ASSERT_NE(model, nullptr);
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
+
+  const JointVector q = JointVector::Zero(3);
+  std::vector<Pose> poses;
+  const KinematicsResult result =
+      solver->GetLinkPoses(q, {"link1", "link2", "tip"}, &poses);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(poses.size(), 3U);
+  EXPECT_NEAR(poses[0].position.x(), 0.0, 1.0e-9);
+  EXPECT_NEAR(poses[1].position.x(), 3.0, 1.0e-9);
+  EXPECT_NEAR(poses[2].position.x(), 6.5, 1.0e-9);
+}
+
+TEST(KdlKinematicsTest, ComputesIntermediateLinkJacobian) {
+  auto model = MakePlanarArm();
+  ASSERT_NE(model, nullptr);
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
+
+  const JointVector q = JointVector::Zero(3);
+  JacobianMatrix jacobian;
+  const KinematicsResult result =
+      solver->GetJacobian(q, "link2", &jacobian);
+  ASSERT_TRUE(result.ok()) << result.message;
+  ASSERT_EQ(jacobian.cols(), 3);
+  EXPECT_NEAR(jacobian(1, 0), 5.5, 1.0e-9);
+  EXPECT_NEAR(jacobian(1, 1), 2.5, 1.0e-9);
+  EXPECT_NEAR(jacobian(1, 2), 0.0, 1.0e-9);
+  EXPECT_NEAR(jacobian(5, 0), 1.0, 1.0e-9);
+  EXPECT_NEAR(jacobian(5, 1), 1.0, 1.0e-9);
+  EXPECT_NEAR(jacobian(5, 2), 0.0, 1.0e-9);
+}
+
+TEST(KdlKinematicsTest, SolvesIkForIntermediateLinkUsingPrefixChain) {
+  auto model = MakePlanarArm();
+  ASSERT_NE(model, nullptr);
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  ASSERT_TRUE(solver->Initialize(model).ok());
+
+  JointVector target_q(3);
+  target_q << 0.2, -0.5, 0.35;
+  Pose target;
+  ASSERT_TRUE(solver->GetLinkPose(target_q, "link2", &target).ok());
+
+  IkRequest request;
+  request.target_link = "link2";
+  request.target_pose = target;
+  request.initial_q = target_q;
+  request.initial_q(0) += 0.01;
+  request.initial_q(1) -= 0.01;
+  request.options.position_tolerance = 1.0e-6;
+  request.options.orientation_tolerance = 1.0e-6;
+  const IkResult result = solver->InverseKinematics(request);
+  ASSERT_TRUE(result.result.ok()) << result.result.message;
+  EXPECT_NEAR(result.position_error, 0.0, 1.0e-6);
+  EXPECT_NEAR(result.orientation_error, 0.0, 1.0e-6);
+  EXPECT_NEAR(result.solution(2), request.initial_q(2), 1.0e-12);
+}
+
+TEST(KdlKinematicsTest, RejectsActiveJointsOnDifferentBranches) {
+  ModelDescription description;
+  description.name = "branched_active_model";
+  description.root_link = "base";
+  description.links = {{"base"}, {"left"}, {"right"}};
+
+  JointModel left;
+  left.name = "left_joint";
+  left.type = JointType::kRevolute;
+  left.parent_link = "base";
+  left.child_link = "left";
+  left.axis = Eigen::Vector3d::UnitZ();
+
+  JointModel right;
+  right.name = "right_joint";
+  right.type = JointType::kRevolute;
+  right.parent_link = "base";
+  right.child_link = "right";
+  right.axis = Eigen::Vector3d::UnitZ();
+
+  description.joints = {left, right};
+  description.joint_order = {"left_joint", "right_joint"};
+  auto model = std::make_shared<KinematicsModel>();
+  ASSERT_TRUE(model->Initialize(description).ok());
+
+  auto solver = KinematicsSolverFactory::Instance().Create();
+  ASSERT_NE(solver, nullptr);
+  const KinematicsResult result = solver->Initialize(model);
+  EXPECT_EQ(result.status, KinematicsStatus::kUnsupported);
+}
+
 TEST(KdlKinematicsTest, FactoryCreatesKdlBackend) {
   KinematicsSolverConfig config;
   auto solver = KinematicsSolverFactory::Instance().Create(config);
