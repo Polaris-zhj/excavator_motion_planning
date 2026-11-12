@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "excavator_kinematics/kinematics_model.hpp"
@@ -15,14 +16,16 @@ struct KdlChainDescription {
   KDL::Chain chain;
   std::vector<std::size_t> joint_indices;
   std::vector<JointLimit> joint_limits;
+  std::unordered_map<std::string, unsigned int> link_segment_indices;
 };
 
 class KdlModelConverter {
  public:
-  KinematicsResult BuildChain(const KinematicsModel& model,
-                              const std::string& base_link,
-                              const std::string& tip_link,
-                              KdlChainDescription* description) const;
+  // Builds the longest root-to-leaf path containing every active joint.
+  // A branched active-joint topology cannot be represented by one KDL Chain.
+  KinematicsResult BuildFullChain(
+      const KinematicsModel& model,
+      KdlChainDescription* description) const;
 };
 
 }  // namespace planning
