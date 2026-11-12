@@ -4,9 +4,11 @@
 #include <cmath>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <Eigen/Geometry>
 
+#include "chainiksolverpos_nr_jl.hpp"
 #include "chainiksolvervel_wdls.hpp"
 
 #include "excavator_kinematics/backend/kdl/kdl_type_converter.hpp"
@@ -54,8 +56,9 @@ KdlKinematicsSolver::KdlKinematicsSolver(KinematicsSolverConfig config)
 KinematicsResult KdlKinematicsSolver::Initialize(
     std::shared_ptr<const KinematicsModel> model) {
   if (!model || !model->initialized()) {
-    return KinematicsResult::Failure(KinematicsStatus::kInvalidArgument,
-                                     "an initialized KinematicsModel is required");
+    return KinematicsResult::Failure(
+        KinematicsStatus::kInvalidArgument,
+        "an initialized KinematicsModel is required");
   }
   if (config_.ik_solver != "nr_jl") {
     return KinematicsResult::Failure(
@@ -71,15 +74,32 @@ KinematicsResult KdlKinematicsSolver::Initialize(
         KinematicsStatus::kInvalidArgument,
         "IK iterations and tolerances must be positive and finite");
   }
+
+  KdlChainDescription description;
+  KinematicsResult result =
+      model_converter_.BuildFullChain(*model, &description);
+  if (!result.ok()) return result;
+
+  auto fk_solver =
+      std::make_unique<KDL::ChainFkSolverPos_recursive>(description.chain);
+  auto jacobian_solver =
+      std::make_unique<KDL::ChainJntToJacSolver>(description.chain);
+
   std::lock_guard<std::mutex> lock(mutex_);
   model_ = std::move(model);
-  bundles_.clear();
+  chain_ = std::move(description.chain);
+  joint_indices_ = std::move(description.joint_indices);
+  joint_limits_ = std::move(description.joint_limits);
+  link_segment_indices_ = std::move(description.link_segment_indices);
+  fk_solver_ = std::move(fk_solver);
+  jacobian_solver_ = std::move(jacobian_solver);
+  last_error_message_.clear();
   return KinematicsResult::Success();
 }
 
 KinematicsResult KdlKinematicsSolver::ValidateJointVector(
     const JointVector& q) const {
-  if (!model_) {
+  if (!model_ || !fk_solver_ || !jacobian_solver_) {
     return KinematicsResult::Failure(KinematicsStatus::kModelNotReady,
                                      "KDL solver has not been initialized");
   }
@@ -96,36 +116,24 @@ KinematicsResult KdlKinematicsSolver::ValidateJointVector(
   return KinematicsResult::Success();
 }
 
-std::string KdlKinematicsSolver::MakeCacheKey(
-    const std::string& base_link, const std::string& tip_link) const {
-  return base_link + "->" + tip_link;
+KinematicsResult KdlKinematicsSolver::MapJointVector(
+    const JointVector& q, KDL::JntArray* q_kdl) const {
+  if (q_kdl == nullptr ||
+      !KdlTypeConverter::ToKdlJntArray(q, joint_indices_, q_kdl)) {
+    return KinematicsResult::Failure(
+        KinematicsStatus::kDimensionMismatch,
+        "failed to map project joint vector to full KDL Chain order");
+  }
+  return KinematicsResult::Success();
 }
 
-KinematicsResult KdlKinematicsSolver::GetOrCreateBundleLocked(
-    const std::string& base_link, const std::string& tip_link,
-    KdlSolverBundle** bundle) const {
-  if (bundle == nullptr || !model_) {
-    return KinematicsResult::Failure(KinematicsStatus::kModelNotReady,
-                                     "solver is not initialized");
-  }
-  const std::string key = MakeCacheKey(base_link, tip_link);
-  const auto found = bundles_.find(key);
-  if (found != bundles_.end()) {
-    *bundle = found->second.get();
-    return KinematicsResult::Success();
-  }
-  KdlChainDescription description;
-  KinematicsResult result =
-      model_converter_.BuildChain(*model_, base_link, tip_link, &description);
-  if (!result.ok()) return result;
-
-  auto created = std::make_unique<KdlSolverBundle>(std::move(description));
-  result = created->Initialize();
-  if (!result.ok()) return result;
-  KdlSolverBundle* raw = created.get();
-  bundles_.emplace(key, std::move(created));
-  *bundle = raw;
-  return KinematicsResult::Success();
+bool KdlKinematicsSolver::GetSegmentIndex(
+    const std::string& link_name, unsigned int* segment_index) const {
+  if (segment_index == nullptr) return false;
+  const auto found = link_segment_indices_.find(link_name);
+  if (found == link_segment_indices_.end()) return false;
+  *segment_index = found->second;
+  return true;
 }
 
 KinematicsResult KdlKinematicsSolver::GetLinkPoseLocked(
@@ -138,27 +146,29 @@ KinematicsResult KdlKinematicsSolver::GetLinkPoseLocked(
     return KinematicsResult::Failure(KinematicsStatus::kUnknownLink,
                                      "unknown target Link: " + link_name);
   }
-  if (link_name == model_->root_link()) {
+  unsigned int segment_index = 0;
+  if (!GetSegmentIndex(link_name, &segment_index)) {
+    return KinematicsResult::Failure(
+        KinematicsStatus::kUnsupported,
+        "Link is outside the selected single KDL Chain: " + link_name);
+  }
+  if (segment_index == 0U) {
     *pose = Pose{};
     return KinematicsResult::Success();
   }
 
-  KdlSolverBundle* bundle = nullptr;
-  KinematicsResult result =
-      GetOrCreateBundleLocked(model_->root_link(), link_name, &bundle);
-  if (!result.ok()) return result;
   KDL::JntArray q_kdl;
-  if (!KdlTypeConverter::ToKdlJntArray(q, bundle->joint_indices(), &q_kdl)) {
-    return KinematicsResult::Failure(
-        KinematicsStatus::kDimensionMismatch,
-        "failed to map project joint vector to KDL Chain order");
-  }
+  KinematicsResult result = MapJointVector(q, &q_kdl);
+  if (!result.ok()) return result;
+
   KDL::Frame frame;
-  const int code = bundle->ComputeFk(q_kdl, &frame);
+  const int code =
+      fk_solver_->JntToCart(q_kdl, frame, static_cast<int>(segment_index));
   if (code != KDL::SolverI::E_NOERROR) {
+    last_error_message_ = fk_solver_->strError(code);
     return KinematicsResult::Failure(
         KinematicsStatus::kBackendFailure,
-        "KDL FK failed: " + bundle->last_error_message());
+        "KDL FK failed: " + last_error_message_);
   }
   *pose = KdlTypeConverter::FromKdlFrame(frame);
   return KinematicsResult::Success();
@@ -235,38 +245,34 @@ KinematicsResult KdlKinematicsSolver::GetJacobian(
   const Eigen::Index joint_count =
       static_cast<Eigen::Index>(model_->GetActiveJointNames().size());
   JacobianMatrix output = JacobianMatrix::Zero(6, joint_count);
-  if (link_name == model_->root_link()) {
-    *jacobian = std::move(output);
-    return KinematicsResult::Success();
+  unsigned int segment_index = 0;
+  if (!GetSegmentIndex(link_name, &segment_index)) {
+    return KinematicsResult::Failure(
+        KinematicsStatus::kUnsupported,
+        "Link is outside the selected single KDL Chain: " + link_name);
   }
-
-  KdlSolverBundle* bundle = nullptr;
-  result = GetOrCreateBundleLocked(model_->root_link(), link_name, &bundle);
-  if (!result.ok()) return result;
-  if (bundle->joint_indices().empty()) {
+  if (segment_index == 0U || chain_.getNrOfJoints() == 0U) {
     *jacobian = std::move(output);
     return KinematicsResult::Success();
   }
 
   KDL::JntArray q_kdl;
-  if (!KdlTypeConverter::ToKdlJntArray(q, bundle->joint_indices(), &q_kdl)) {
-    return KinematicsResult::Failure(
-        KinematicsStatus::kDimensionMismatch,
-        "failed to map project joint vector to KDL Chain order");
-  }
-  KDL::Jacobian kdl_jacobian(
-      static_cast<unsigned int>(bundle->joint_indices().size()));
-  const int code = bundle->ComputeJacobian(q_kdl, &kdl_jacobian);
+  result = MapJointVector(q, &q_kdl);
+  if (!result.ok()) return result;
+  KDL::Jacobian kdl_jacobian(chain_.getNrOfJoints());
+  const int code = jacobian_solver_->JntToJac(
+      q_kdl, kdl_jacobian, static_cast<int>(segment_index));
   if (code != KDL::SolverI::E_NOERROR) {
+    last_error_message_ = jacobian_solver_->strError(code);
     return KinematicsResult::Failure(
         KinematicsStatus::kBackendFailure,
-        "KDL Jacobian failed: " + bundle->last_error_message());
+        "KDL Jacobian failed: " + last_error_message_);
   }
+
   const JacobianMatrix chain_jacobian =
       KdlTypeConverter::FromKdlJacobian(kdl_jacobian);
-  for (std::size_t column = 0; column < bundle->joint_indices().size();
-       ++column) {
-    output.col(static_cast<Eigen::Index>(bundle->joint_indices()[column])) =
+  for (std::size_t column = 0; column < joint_indices_.size(); ++column) {
+    output.col(static_cast<Eigen::Index>(joint_indices_[column])) =
         chain_jacobian.col(static_cast<Eigen::Index>(column));
   }
   *jacobian = std::move(output);
@@ -288,6 +294,7 @@ IkResult KdlKinematicsSolver::InverseKinematics(
   if (options.orientation_tolerance == default_options.orientation_tolerance) {
     options.orientation_tolerance = config_.orientation_tolerance;
   }
+
   output.result = ValidateJointVector(request.initial_q);
   if (!output.result.ok()) return output;
   if (request.target_link.empty() || !IsFinite(request.target_pose) ||
@@ -307,6 +314,16 @@ IkResult KdlKinematicsSolver::InverseKinematics(
         "unknown IK target Link: " + request.target_link);
     return output;
   }
+
+  unsigned int target_segment = 0;
+  if (!GetSegmentIndex(request.target_link, &target_segment)) {
+    output.result = KinematicsResult::Failure(
+        KinematicsStatus::kUnsupported,
+        "IK target is outside the selected single KDL Chain: " +
+            request.target_link);
+    return output;
+  }
+
   if (options.enforce_joint_limits) {
     const auto& joint_names = model_->GetActiveJointNames();
     for (std::size_t i = 0; i < joint_names.size(); ++i) {
@@ -321,7 +338,8 @@ IkResult KdlKinematicsSolver::InverseKinematics(
       }
     }
   }
-  if (request.target_link == model_->root_link()) {
+
+  if (target_segment == 0U) {
     const double position_error = request.target_pose.position.norm();
     const double orientation_error = OrientationError(
         Eigen::Quaterniond::Identity(), request.target_pose.orientation);
@@ -337,42 +355,73 @@ IkResult KdlKinematicsSolver::InverseKinematics(
     return output;
   }
 
-  KdlSolverBundle* bundle = nullptr;
-  output.result = GetOrCreateBundleLocked(model_->root_link(),
-                                          request.target_link, &bundle);
-  if (!output.result.ok()) return output;
-  if (bundle->joint_indices().empty()) {
+  KDL::Chain prefix_chain;
+  for (unsigned int i = 0; i < target_segment; ++i) {
+    prefix_chain.addSegment(chain_.getSegment(i));
+  }
+  const std::size_t prefix_joint_count = prefix_chain.getNrOfJoints();
+  if (prefix_joint_count == 0U) {
     output.result = KinematicsResult::Failure(
         KinematicsStatus::kNoConvergence,
-        "target Link has no movable joints relative to root_link");
+        "target Link has no active joints relative to root_link");
     return output;
+  }
+
+  std::vector<std::size_t> prefix_indices;
+  std::vector<JointLimit> prefix_limits;
+  prefix_indices.reserve(prefix_joint_count);
+  prefix_limits.reserve(prefix_joint_count);
+  for (std::size_t i = 0; i < prefix_joint_count; ++i) {
+    prefix_indices.push_back(joint_indices_[i]);
+    prefix_limits.push_back(joint_limits_[i]);
   }
 
   KDL::JntArray seed;
   if (!KdlTypeConverter::ToKdlJntArray(request.initial_q,
-                                       bundle->joint_indices(), &seed)) {
+                                       prefix_indices, &seed)) {
     output.result = KinematicsResult::Failure(
         KinematicsStatus::kDimensionMismatch,
-        "failed to map IK seed to KDL Chain order");
+        "failed to map IK seed to target prefix Chain order");
     return output;
   }
-  const KDL::Frame target = KdlTypeConverter::ToKdlFrame(request.target_pose);
-  KDL::JntArray solution(seed.rows());
-  const int code = bundle->SolveIk(seed, target, options,
-                                   options.enforce_joint_limits,
-                                   &solution);
+
+  KDL::JntArray lower(static_cast<unsigned int>(prefix_joint_count));
+  KDL::JntArray upper(static_cast<unsigned int>(prefix_joint_count));
+  constexpr double kWideLimit = 1.0e9;
+  for (unsigned int i = 0; i < prefix_joint_count; ++i) {
+    const JointLimit& limit = prefix_limits[i];
+    lower(i) = options.enforce_joint_limits && limit.has_position_limits
+                   ? limit.lower
+                   : -kWideLimit;
+    upper(i) = options.enforce_joint_limits && limit.has_position_limits
+                   ? limit.upper
+                   : kWideLimit;
+  }
+
+  KDL::ChainFkSolverPos_recursive prefix_fk_solver(prefix_chain);
+  KDL::ChainIkSolverVel_wdls velocity_solver(prefix_chain);
+  const double epsilon =
+      std::min(options.position_tolerance, options.orientation_tolerance);
+  KDL::ChainIkSolverPos_NR_JL position_solver(
+      prefix_chain, lower, upper, prefix_fk_solver, velocity_solver,
+      options.max_iterations, epsilon);
+  KDL::JntArray prefix_solution(static_cast<unsigned int>(prefix_joint_count));
+  const KDL::Frame target =
+      KdlTypeConverter::ToKdlFrame(request.target_pose);
+  const int code = position_solver.CartToJnt(seed, target, prefix_solution);
   if (code != KDL::SolverI::E_NOERROR) {
+    last_error_message_ = position_solver.strError(code);
     output.result = KinematicsResult::Failure(
         code == KDL::ChainIkSolverVel_wdls::E_CONVERGE_PINV_SINGULAR
             ? KinematicsStatus::kSingular
             : KinematicsStatus::kNoConvergence,
-        "KDL position IK failed: " + bundle->last_error_message());
+        "KDL position IK failed: " + last_error_message_);
     return output;
   }
 
   output.solution = request.initial_q;
   if (!KdlTypeConverter::FromKdlJntArray(
-          solution, bundle->joint_indices(), &output.solution)) {
+          prefix_solution, prefix_indices, &output.solution)) {
     output.result = KinematicsResult::Failure(
         KinematicsStatus::kBackendFailure,
         "failed to map KDL IK solution to project joint order");
